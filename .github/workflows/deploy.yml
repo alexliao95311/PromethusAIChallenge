@@ -1,0 +1,161 @@
+name: Deploy to DigitalOcean VM
+
+on:
+  push:
+    branches:
+      - main 
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Test SSH Connection
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          timeout: 30s
+          command_timeout: 1m
+          script: |
+            echo "🔍 Testing SSH connection..."
+            echo "Hostname: $(hostname)"
+            echo "Current user: $(whoami)"
+            echo "Current directory: $(pwd)"
+            echo "✅ SSH connection successful"
+
+      - name: Update Code
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          timeout: 60s
+          command_timeout: 3m
+          script: |
+            set -e
+            echo "🚀 Updating code..."
+            cd /home/${{ secrets.VM_USER }}/DebateSim
+            git pull origin main
+            echo "✅ Code updated successfully"
+
+      - name: Restart Backend
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          timeout: 60s
+          command_timeout: 2m
+          script: |
+            set -e
+            echo "🔄 Restarting Backend..."
+            cd /home/${{ secrets.VM_USER }}/DebateSim
+            
+            # Kill existing backend process using PID file
+            echo "Stopping existing backend..."
+            if [ -f "backend.pid" ]; then
+              if kill $(cat backend.pid) 2>/dev/null; then
+                echo "Backend process stopped"
+              else
+                echo "Backend PID file exists but process not running"
+              fi
+              rm -f backend.pid
+            else
+              echo "No backend PID file found"
+            fi
+            
+            # Check if venv exists and activate
+            if [ ! -f "venv/bin/activate" ]; then
+              echo "❌ Virtual environment not found"
+              exit 1
+            fi
+            
+            echo "Activating virtual environment..."
+            source venv/bin/activate
+            
+            echo "Starting backend server..."
+            # Start backend server in background and save PID
+            nohup uvicorn main:app --host 0.0.0.0 --port 5000 > backend.log 2>&1 &
+            echo $! > backend.pid
+            
+            # Wait and check if process started
+            sleep 5
+            
+            if pgrep -f "uvicorn main:app" > /dev/null; then
+              echo "✅ Backend started successfully"
+              # Test backend is responding
+              if curl -f -s http://localhost:5000/docs > /dev/null; then
+                echo "✅ Backend is responding to requests"
+              else
+                echo "⚠️  Backend process running but not responding"
+              fi
+            else
+              echo "❌ Backend failed to start"
+              echo "Backend logs:"
+              cat backend.log || echo "No backend logs available"
+              exit 1
+            fi
+
+      - name: Build Frontend
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          timeout: 60s
+          command_timeout: 8m
+          script: |
+            set -e
+            echo "🛠 Building Frontend..."
+            cd /home/${{ secrets.VM_USER }}/DebateSim/frontend
+            
+            echo "📦 Installing dependencies..."
+            npm install
+            
+            echo "🔨 Building frontend with domain API host..."
+            export VITE_API_URL=https://debatesim.us
+            rm -rf dist
+            npm run build
+            echo "✅ Frontend built successfully"
+            
+            echo "📁 Publishing frontend to Caddy web root..."
+            mkdir -p /var/www/debatesim
+            rm -rf /var/www/debatesim/*
+            cp -r dist/* /var/www/debatesim/
+            echo "✅ Frontend published to /var/www/debatesim"
+
+      - name: Reload Caddy
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          timeout: 30s
+          command_timeout: 1m
+          script: |
+            set -e
+            echo "📄 Copying Caddy config..."
+            cd /home/${{ secrets.VM_USER }}/DebateSim
+            sudo /usr/bin/cp /home/${{ secrets.VM_USER }}/DebateSim/deploy/Caddyfile /etc/caddy/Caddyfile
+            sudo /usr/bin/caddy validate --config /etc/caddy/Caddyfile
+            sudo /usr/bin/systemctl reload caddy
+            echo "✅ Caddy config reloaded"
+
+      - name: Finalize Deploy
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USER }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          timeout: 30s
+          command_timeout: 1m
+          script: |
+            set -e
+            echo "🎉 Deployment completed successfully!"
+            echo "Backend: https://debatesim.us"
+            echo "Frontend: https://debatesim.us"

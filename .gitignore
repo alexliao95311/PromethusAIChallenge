@@ -1,0 +1,36 @@
+# Ignore .env
+.env
+
+# Ignore local Python environment folder (if not already ignored)
+my-venv/
+venv
+
+# You can add other ignore patterns as needed
+*.pyc
+__pycache__/
+
+# Ignore .gradio
+.gradio/
+
+node_modules
+
+# Google Cloud credentials
+credentials/
+*.json
+!package.json
+!package-lock.json
+
+# Audio files
+*.wav
+*.mp3
+*.m4a
+*.flac
+
+# Logs
+*.log
+*.pid
+nohup.out
+
+# OS files
+.DS_Store
+Thumbs.db
