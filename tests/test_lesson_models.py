@@ -109,8 +109,9 @@ def test_user_card_progress_defaults():
     progress = UserCardProgress(user_id="u1", card_id="card-1")
     assert progress.leitner_box == 1
     assert progress.correct_count == 0
-    assert progress.last_reviewed is None
-    assert progress.next_review_session == 1
+    assert progress.incorrect_count == 0
+    assert progress.last_reviewed_session is None
+    assert progress.next_due_session == 1
 
 
 def test_quiz_attempt_valid_instance():
@@ -183,7 +184,7 @@ def test_bill_section_rejects_empty_text():
 
 def test_user_card_progress_rejects_out_of_range_leitner_box():
     with pytest.raises(ValidationError):
-        UserCardProgress(user_id="u1", card_id="c1", leitner_box=6)
+        UserCardProgress(user_id="u1", card_id="c1", leitner_box=4)
 
 
 def test_quiz_attempt_rejects_out_of_range_score():
@@ -196,8 +197,6 @@ def test_leitner_box_enum_values():
         LeitnerBox.BOX_1,
         LeitnerBox.BOX_2,
         LeitnerBox.BOX_3,
-        LeitnerBox.BOX_4,
-        LeitnerBox.BOX_5,
     ]
 
 

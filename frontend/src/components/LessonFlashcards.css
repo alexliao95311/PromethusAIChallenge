@@ -1,0 +1,254 @@
+.lesson-flashcards-container {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  color: #f8fafc;
+  font-family: inherit;
+}
+
+.lesson-flashcards-error {
+  color: #f87171;
+  text-align: center;
+  padding: 2rem;
+}
+
+.lesson-flashcards-error-inline {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+/* --- Summary: mastery bar, due count, box distribution --- */
+
+.flashcards-summary {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.mastery-bar-wrapper {
+  margin-bottom: 1rem;
+}
+
+.mastery-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  margin-bottom: 0.4rem;
+}
+
+.mastery-bar-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.8);
+  overflow: hidden;
+}
+
+.mastery-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4a90e2, #34d399);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.flashcards-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.due-count-badge {
+  background: rgba(74, 144, 226, 0.18);
+  border: 1px solid rgba(74, 144, 226, 0.4);
+  color: #93c5fd;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.box-count {
+  font-size: 0.8rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  color: #e2e8f0;
+}
+
+.box-count-1 {
+  border-color: rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+}
+
+.box-count-2 {
+  border-color: rgba(251, 191, 36, 0.4);
+  color: #fcd34d;
+}
+
+.box-count-3 {
+  border-color: rgba(52, 211, 153, 0.4);
+  color: #6ee7b7;
+}
+
+/* --- Review card --- */
+
+.flashcard-review-card {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 12px;
+  padding: 2rem;
+  text-align: center;
+}
+
+.flashcard-progress {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-bottom: 0.75rem;
+}
+
+.needs-review-label {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  margin-bottom: 1rem;
+}
+
+.needs-review-box-1 {
+  background: rgba(248, 113, 113, 0.15);
+  color: #fca5a5;
+}
+
+.needs-review-box-2 {
+  background: rgba(251, 191, 36, 0.15);
+  color: #fcd34d;
+}
+
+.needs-review-box-3 {
+  background: rgba(52, 211, 153, 0.15);
+  color: #6ee7b7;
+}
+
+.flashcard-term {
+  font-size: 1.75rem;
+  margin: 0 0 1.5rem 0;
+  color: #f8fafc;
+}
+
+.flashcard-answer {
+  text-align: left;
+  animation: flashcard-fade-in 0.2s ease;
+}
+
+@keyframes flashcard-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.flashcard-definition {
+  font-size: 1.05rem;
+  color: #f1f5f9;
+  margin-bottom: 0.75rem;
+}
+
+.flashcard-context,
+.flashcard-example {
+  font-size: 0.95rem;
+  color: #cbd5e1;
+  margin-bottom: 0.6rem;
+}
+
+.flashcard-source {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-bottom: 1.5rem;
+}
+
+.flashcard-answer-buttons {
+  display: flex;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.flashcards-answer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: none;
+  border-radius: 8px;
+  padding: 0.65rem 1.1rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.flashcards-answer-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.flashcards-answer-btn:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.flashcards-answer-correct {
+  background: rgba(52, 211, 153, 0.18);
+  color: #6ee7b7;
+  border: 1px solid rgba(52, 211, 153, 0.4);
+}
+
+.flashcards-answer-incorrect {
+  background: rgba(248, 113, 113, 0.18);
+  color: #fca5a5;
+  border: 1px solid rgba(248, 113, 113, 0.4);
+}
+
+.flashcards-primary-btn {
+  background: #4a90e2;
+  color: #f8fafc;
+  border: none;
+  border-radius: 8px;
+  padding: 0.7rem 1.4rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.flashcards-primary-btn:hover {
+  background: #3a7bc8;
+}
+
+/* --- Completion state --- */
+
+.flashcards-complete {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 12px;
+  color: #6ee7b7;
+}
+
+.flashcards-complete h3 {
+  color: #f8fafc;
+  margin: 0.75rem 0 0.25rem 0;
+}
+
+.flashcards-complete p {
+  color: #cbd5e1;
+  margin-bottom: 1.25rem;
+}

@@ -1,5 +1,6 @@
 import axios from "axios";
 import languagePreferenceService from './services/languagePreferenceService';
+import { auth } from './firebase/firebaseConfig';
 
 // frontend/src/api.js
 // IMPORTANT: Requires VITE_API_URL env var to be set
@@ -147,4 +148,39 @@ export const analyzeSpeechEfficiency = async (speech, options = {}) => {
     err.detail = detail;
     throw err;
   }
+};
+
+// --- Lesson Mode: adaptive flashcard review (Leitner boxes) ---
+// These are the first backend calls that require an authenticated user:
+// the backend verifies a Firebase ID token and derives the caller's uid
+// from it, so a fresh token must be attached to every request.
+async function getAuthHeaders() {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error("You must be signed in to review flashcards.");
+  }
+  const token = await user.getIdToken();
+  return { Authorization: `Bearer ${token}` };
+}
+
+export const startReviewSession = async (lessonId) => {
+  const headers = await getAuthHeaders();
+  const response = await apiClient.post(`/lesson/${lessonId}/review/start-session`, {}, { headers });
+  return response.data.session;
+};
+
+export const getReviewState = async (lessonId) => {
+  const headers = await getAuthHeaders();
+  const response = await apiClient.get(`/lesson/${lessonId}/review/state`, { headers });
+  return response.data;
+};
+
+export const submitReviewAnswer = async (lessonId, cardId, correct) => {
+  const headers = await getAuthHeaders();
+  const response = await apiClient.post(
+    `/lesson/${lessonId}/review/answer`,
+    { card_id: cardId, correct },
+    { headers }
+  );
+  return response.data;
 };

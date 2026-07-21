@@ -76,6 +76,7 @@ class Lesson(FirestoreModel):
     pro_arguments: List[GroundedClaim] = Field(default_factory=list)
     con_arguments: List[GroundedClaim] = Field(default_factory=list)
     source_sections: List[str] = Field(default_factory=list)
+    vocabulary_card_ids: List[str] = Field(default_factory=list)
 
     created_at: datetime = Field(default_factory=_utcnow)
 
@@ -101,24 +102,30 @@ class Flashcard(FirestoreModel):
 
 
 class LeitnerBox(IntEnum):
-    """The five Leitner boxes; higher box = better mastery, longer interval."""
+    """The three Leitner boxes (Increment 4). Box 1 is due every session,
+    Box 2 every third session, Box 3 every seventh session -- see
+    `services/flashcard_review.py` for the due-date math."""
 
     BOX_1 = 1
     BOX_2 = 2
     BOX_3 = 3
-    BOX_4 = 4
-    BOX_5 = 5
 
 
 class UserCardProgress(FirestoreModel):
-    """A single user's Leitner-system progress on a single flashcard."""
+    """A single user's Leitner-system progress on a single flashcard.
+
+    Session numbers (not wall-clock time) drive scheduling: `last_reviewed_session`
+    and `next_due_session` refer to a lesson's review-session counter (see
+    `LessonProgress.current_session`), not calendar days.
+    """
 
     user_id: str
     card_id: str
-    leitner_box: int = Field(default=1, ge=1, le=5)
+    leitner_box: int = Field(default=1, ge=1, le=3)
     correct_count: int = Field(default=0, ge=0)
-    last_reviewed: Optional[datetime] = None
-    next_review_session: int = Field(default=1, ge=1)
+    incorrect_count: int = Field(default=0, ge=0)
+    last_reviewed_session: Optional[int] = Field(default=None, ge=1)
+    next_due_session: int = Field(default=1, ge=1)
 
 
 # ---------------------------------------------------------------------------
@@ -160,7 +167,12 @@ class PersonaProfile(FirestoreModel):
 
 
 class LessonProgress(FirestoreModel):
-    """A user's overall progress through a single lesson (vocab + quizzes)."""
+    """A user's overall progress through a single lesson (vocab + quizzes).
+
+    `current_session` is the Leitner review-session counter for this user +
+    lesson (Increment 4): 0 means the user has never started a review
+    session yet; each explicit "start a new session" action increments it.
+    """
 
     user_id: str
     lesson_id: str
@@ -169,4 +181,5 @@ class LessonProgress(FirestoreModel):
     quiz_attempts: int = Field(default=0, ge=0)
     best_quiz_score: Optional[float] = Field(default=None, ge=0, le=100)
     completed: bool = False
+    current_session: int = Field(default=0, ge=0)
     updated_at: datetime = Field(default_factory=_utcnow)

@@ -1,9 +1,10 @@
 # Lesson Mode Architecture
 
-Status: **Increment 3 — Vocabulary Generation.** `POST /lesson/generate`
-can now optionally produce 0-12 bill-specific vocabulary cards alongside
-the lesson. Flashcard *review scheduling* (Leitner boxes) and quiz
-generation still do not exist; existing debate/bill functionality is
+Status: **Increment 4 — Flashcard UI and Leitner System.** Adds adaptive,
+per-user flashcard review scheduling (3-box Leitner system, session-based
+due dates) plus a React review component. This is also the first
+server-side-authenticated feature in the codebase -- see "Auth" below. Quiz
+generation still does not exist; existing debate/bill functionality is
 untouched.
 
 ## Why
@@ -134,12 +135,33 @@ Increment 3 adds:
   against a mocked LLM callable, and the `/lesson/generate` endpoint with
   and without `include_vocabulary`.
 
-Future increments are expected to add:
+Increment 4 adds:
 
-- Flashcard *review scheduling* (Leitner boxes, due dates, per-user
-  progress) and quiz generation.
-- `frontend/src/components/lesson/` (or similar) for the new UI, following
-  the existing flat-components convention.
+- `services/auth.py` — `get_current_user_id`, a FastAPI dependency that
+  verifies a Firebase ID token (`Authorization: Bearer <token>`) via
+  `firebase_admin.auth.verify_id_token` and returns its `uid`. **This is the
+  first server-side auth check anywhere in DebateSim** -- see "Auth" below.
+- `services/flashcard_review.py` — `FlashcardReviewService` (session
+  tracking, due-card queries, mastery/box-distribution reporting) and the
+  pure scheduling functions `compute_next_due_session`, `is_card_due`,
+  `apply_answer`.
+- Three new endpoints on the existing `/lesson` router, all requiring
+  `Depends(get_current_user_id)`: `POST /lesson/{lesson_id}/review/start-session`,
+  `GET /lesson/{lesson_id}/review/state`, `POST /lesson/{lesson_id}/review/answer`.
+- `Lesson.vocabulary_card_ids` (new field) -- `POST /lesson/generate` now
+  persists the generated vocabulary's card_ids onto the lesson doc when
+  `include_vocabulary=true`, so the review endpoints can list a lesson's
+  flashcards without a Firestore compound query.
+- `frontend/src/components/LessonFlashcards.jsx` (+ `.css`) — the review UI:
+  term-first reveal flow, mastery bar, due count, box-distribution badges, a
+  "Needs review"/"Mastered" label per card, and a session-completion state.
+- First frontend test tooling in the repo: Vitest + React Testing Library
+  (`frontend/src/components/LessonFlashcards.test.jsx`), wired via
+  `vite.config.js`'s new `test` block and `npm test`.
+
+Future increments are expected to add: quiz generation, and a full Lesson
+Mode page/route that actually mounts `LessonFlashcards` (no such page
+exists yet -- see Non-goals).
 
 ## Data models (`models/lesson_models.py`)
 
@@ -156,14 +178,14 @@ All lesson-mode models inherit from a small `FirestoreModel` base
 |---|---|---|
 | `BillSection` | Unit of retrieval for the RAG pipeline | `section_id`, `bill_id`, `heading`, `text`, `order`, `embedding` |
 | `GroundedClaim` | A claim tied to the section_id(s) that support it | `claim`, `section_ids` (non-empty) |
-| `Lesson` | Generated, grounded lesson for a bill (Increment 2) | `lesson_id`, `bill_id`, `prompt_version`, `bill_text_hash`, `lesson_title`, `plain_language_summary`, `learning_objectives`, `major_provisions`, `stakeholders`, `pro_arguments`, `con_arguments` (all `List[GroundedClaim]`), `source_sections`, `created_at` |
+| `Lesson` | Generated, grounded lesson for a bill (Increment 2) | `lesson_id`, `bill_id`, `prompt_version`, `bill_text_hash`, `lesson_title`, `plain_language_summary`, `learning_objectives`, `major_provisions`, `stakeholders`, `pro_arguments`, `con_arguments` (all `List[GroundedClaim]`), `source_sections`, `vocabulary_card_ids` (Increment 4), `created_at` |
 | `Flashcard` | Bill-specific vocabulary card, grounded in one section (Increment 3) | `card_id`, `lesson_id`, `term`, `simple_definition`, `bill_context`, `example`, `section_id`, `difficulty` (`beginner`\|`intermediate`\|`advanced`) |
-| `LeitnerBox` | `IntEnum` (1–5) documenting the Leitner box levels | — |
-| `UserCardProgress` | One user's Leitner progress on one flashcard | `user_id`, `card_id`, `leitner_box`, `correct_count`, `last_reviewed`, `next_review_session` |
+| `LeitnerBox` | `IntEnum` (1–3, Increment 4) documenting the Leitner box levels | — |
+| `UserCardProgress` | One user's Leitner progress on one flashcard (Increment 4 shape) | `user_id`, `card_id`, `leitner_box` (1-3), `correct_count`, `incorrect_count`, `last_reviewed_session`, `next_due_session` |
 | `QuizAnswer` | One answer within a quiz attempt | `question_id`, `response`, `is_correct` |
 | `QuizAttempt` | A user's full quiz attempt for a lesson | `attempt_id`, `user_id`, `lesson_id`, `score`, `answers`, `feedback`, `created_at` |
 | `PersonaProfile` | Student-built persona for personalization | `user_id`, `occupation`, `state`, `age_range`, `income_bracket` |
-| `LessonProgress` | Overall per-user progress on a lesson | `user_id`, `lesson_id`, `vocab_mastered`, `vocab_total`, `quiz_attempts`, `best_quiz_score`, `completed`, `updated_at` |
+| `LessonProgress` | Overall per-user progress on a lesson | `user_id`, `lesson_id`, `vocab_mastered`, `vocab_total`, `quiz_attempts`, `best_quiz_score`, `completed`, `current_session` (Increment 4: Leitner session counter), `updated_at` |
 
 Validation is enforced via Pydantic field constraints (e.g. `BillSection.text`
 must be non-empty, `UserCardProgress.leitner_box` is bounded `1..5`,
@@ -307,6 +329,96 @@ bill_id, bill_text -> same 6 BillRagService category queries used for the
   field, so the Increment 2 response shape (`lesson_title` etc. at the top
   level) is unchanged when the flag is omitted.
 
+## Auth (`services/auth.py`, Increment 4)
+
+Before this increment, DebateSim had **no server-side auth anywhere**:
+per-user Firestore writes (transcripts, user docs) went straight from the
+browser via the Firebase client SDK, protected only by Firestore security
+rules, and no FastAPI route ever verified who was calling it. Flashcard
+review progress is the first feature where the *backend itself* must know
+and trust who the caller is -- one user must never be able to read or
+overwrite another user's Leitner progress -- so this increment adds the
+first `Depends(...)` auth dependency in the codebase:
+
+- `get_current_user_id(authorization: str = Header(...))` reads
+  `Authorization: Bearer <Firebase ID token>`, calls
+  `firebase_admin.auth.verify_id_token(...)`, and returns the decoded
+  `uid`. Missing/malformed headers and invalid/expired tokens both raise
+  `401`; if `firebase-admin` isn't installed, `503`.
+- **The uid is never accepted from a request body or query param.** Every
+  review endpoint takes `user_id` only from this dependency, so a client
+  cannot claim to be another user no matter what it sends -- this is what
+  actually enforces "prevent users from modifying another user's
+  progress," not any check inside `FlashcardReviewService` itself (that
+  service trusts whatever `user_id` it's given, by design, since its only
+  caller is the route layer).
+- Frontend: `frontend/src/api.js`'s new review functions
+  (`startReviewSession`, `getReviewState`, `submitReviewAnswer`) attach a
+  fresh `auth.currentUser.getIdToken()` as the bearer token on every call --
+  the first place in the frontend that sends an auth token to the FastAPI
+  backend at all (existing per-user features never did; they used the
+  Firebase client SDK directly instead).
+
+## Flashcard review scheduling (`services/flashcard_review.py`, Increment 4)
+
+Leitner scheduling is driven by a **review-session counter**
+(`LessonProgress.current_session`) per user + lesson, not wall-clock time:
+
+- **Boxes**: 1 (new/missed), 2 (correct once), 3 (correct at least twice,
+  capped -- `MAX_BOX = 3`). `apply_answer` moves a card up one box on a
+  correct answer or resets it straight to Box 1 on an incorrect one,
+  regardless of its prior box.
+- **Due-session math** (`compute_next_due_session`): a card is due
+  `interval - 1` sessions after the session it was last reviewed in, where
+  `interval` is `{1: 1, 2: 3, 3: 7}` for boxes 1/2/3 -- i.e. inclusive
+  counting from the review session itself (reviewed on session *s* is that
+  cycle's "session 1", so a Box 2 card's cycle "session 3" is `s + 2`). A
+  card with no `UserCardProgress` record yet is always due (it's new).
+  `tests/test_flashcard_review.py::test_scheduling_scenario_matches_manual_test_spec`
+  encodes the spec's exact walkthrough (session 1 all due; correct A -> Box
+  2 not due at session 2, due again at session 3; promote to Box 3, not due
+  again until session 9).
+- **Sessions are explicit, not auto-advanced on every request**: `GET
+  .../review/state` only *reads* the current session (auto-initializing it
+  to 1 on a user's very first visit to a lesson) -- it never advances it.
+  Only `POST .../review/start-session` increments
+  `LessonProgress.current_session`. This is what makes a browser refresh
+  mid-session safe: refetching state mid-review shows the same due cards
+  instead of silently skipping ahead a session.
+- `GET .../review/state` returns due cards plus `total_cards`, `due_count`,
+  `box_distribution` (`{"1": n, "2": n, "3": n}`), and `mastery_percent`
+  (share of cards in Box 3) in one payload, so the frontend's mastery
+  bar/due count/box counts can all be driven by a single fetch.
+- `Lesson.vocabulary_card_ids` lets `_load_lesson_cards` find a lesson's
+  flashcards without a Firestore compound query -- `POST /lesson/generate`
+  persists this list onto the lesson doc whenever `include_vocabulary=true`
+  (merging with any ids from a prior vocabulary-generation call for the
+  same lesson).
+
+## Frontend: `LessonFlashcards` component (Increment 4)
+
+`frontend/src/components/LessonFlashcards.jsx` (+ `.css`) is a standalone,
+reusable review UI -- term-first reveal, correct/incorrect buttons, a
+mastery bar, due count, per-box counts, and a "Needs review"/"Learning"/
+"Mastered" label per card (driven by `is_due`/`leitner_box` from `GET
+.../review/state`). Answering optimistically updates the mastery bar/due
+count/box counts locally (matching the "changes immediately" requirement)
+without waiting for a refetch; a completion state with "Start Next Session"
+appears once the due queue is empty.
+
+**No Lesson Mode page exists yet to mount this component into** -- see
+Non-goals. It's built and tested standalone, ready to be dropped into that
+page once it exists.
+
+This is also the first frontend test tooling added to the repo: Vitest +
+React Testing Library (`vitest.config` lives inside `vite.config.js`'s new
+`test` block, environment `jsdom`, run via `npm test`).
+`LessonFlashcards.test.jsx` mocks `../api` entirely (never calls the real
+`VITE_API_URL`-gated `api.js` module body), covering: term-shown-before-
+reveal, reveal shows definition/context/example, correct/incorrect answer
+submission, immediate mastery-bar/due-count updates, the completion state,
+starting a new session, the "Needs review" label, and a load-error state.
+
 ## Testing
 
 `tests/fake_firestore.py` implements the minimal subset of the
@@ -335,18 +447,37 @@ capping, malformed JSON) and `generate_vocabulary` against a mocked LLM
 `MIN_CARDS` without failing, and the `/lesson/generate` endpoint with and
 without `include_vocabulary`).
 
-Run the suite with:
+`tests/test_flashcard_review.py` covers the pure scheduling functions
+(`compute_next_due_session`, `is_card_due`, `apply_answer` including the
+Box-3 cap and incorrect-resets-from-any-box case), the full manual-test
+scheduling scenario from the spec, `FlashcardReviewService` against a fake
+Firestore client (session start/read, due-card listing, box distribution,
+mastery percent, unknown-lesson/card errors), that two different users'
+progress is fully independent, the `get_current_user_id` auth dependency
+(missing header, malformed header, invalid token, valid token), and the
+three review endpoints mounted standalone with `app.dependency_overrides`
+substituting a fixed test uid for the real Firebase token verification.
+
+Run the Python suite with:
 
 ```bash
 python -m pytest tests/ -v
 ```
 
+Run the frontend component tests with:
+
+```bash
+cd frontend && npm test
+```
+
 ## Non-goals for this increment
 
-- No flashcard *review scheduling* -- `UserCardProgress`/`LeitnerBox`
-  already exist as models (Increment 0) but nothing populates or advances
-  them yet; that's a future increment, along with quiz generation.
-- No frontend pages.
+- No quiz generation.
+- No Lesson Mode *page* -- there is still no route/page in the frontend
+  that fetches a lesson and mounts `LessonFlashcards`; it exists only as a
+  standalone, tested component awaiting that page.
+- No refresh-token handling beyond what `getIdToken()` does by default, and
+  no session/box data denormalized onto `PersonaProfile` or anywhere else.
 - Retrieved `BillSection`s are not yet persisted through `LessonRepository`
   (in-memory cache only); generated `Lesson`s and their `Flashcard`s are
   persisted.

@@ -183,6 +183,10 @@ class LessonGenerationService:
         self._repository = repository or LessonRepository()
         self._llm_call = llm_call or _default_llm_call
 
+    @property
+    def repository(self) -> LessonRepository:
+        return self._repository
+
     @staticmethod
     def compute_lesson_id(bill_id: str, bill_text_hash: str) -> str:
         return f"{bill_id}::{LESSON_PROMPT_VERSION}::{bill_text_hash[:16]}"
