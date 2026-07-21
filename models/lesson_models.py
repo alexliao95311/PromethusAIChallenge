@@ -48,15 +48,35 @@ class BillSection(FirestoreModel):
     embedding: Optional[List[float]] = None
 
 
+class GroundedClaim(FirestoreModel):
+    """A single factual claim tied to the bill section(s) that support it."""
+
+    claim: str = Field(min_length=1)
+    section_ids: List[str] = Field(min_length=1)
+
+
 class Lesson(FirestoreModel):
-    """A generated lesson for a bill: summary, stakeholders, and arguments."""
+    """A generated, grounded lesson for a bill (Increment 2).
+
+    Every factual item (provision, stakeholder impact, pro/con argument) is
+    a `GroundedClaim` citing the bill section_id(s) it's derived from, so a
+    lesson can always be traced back to source text.
+    """
 
     lesson_id: str
     bill_id: str
-    summary: str
-    stakeholders: List[str] = Field(default_factory=list)
-    pro_arguments: List[str] = Field(default_factory=list)
-    con_arguments: List[str] = Field(default_factory=list)
+    prompt_version: str
+    bill_text_hash: str
+
+    lesson_title: str = Field(min_length=1)
+    plain_language_summary: str = Field(min_length=1)
+    learning_objectives: List[str] = Field(default_factory=list)
+    major_provisions: List[GroundedClaim] = Field(default_factory=list)
+    stakeholders: List[GroundedClaim] = Field(default_factory=list)
+    pro_arguments: List[GroundedClaim] = Field(default_factory=list)
+    con_arguments: List[GroundedClaim] = Field(default_factory=list)
+    source_sections: List[str] = Field(default_factory=list)
+
     created_at: datetime = Field(default_factory=_utcnow)
 
 

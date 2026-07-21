@@ -1,5 +1,6 @@
 from .lesson_models import (
     BillSection,
+    GroundedClaim,
     Lesson,
     Flashcard,
     LeitnerBox,
@@ -12,6 +13,7 @@ from .lesson_models import (
 
 __all__ = [
     "BillSection",
+    "GroundedClaim",
     "Lesson",
     "Flashcard",
     "LeitnerBox",

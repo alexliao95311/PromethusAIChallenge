@@ -1,9 +1,9 @@
 # Lesson Mode Architecture
 
-Status: **Increment 1 — Bill Section Retrieval and RAG.** Adds the first
-Lesson Mode API route (`POST /lesson/retrieve-sections`) and a reusable RAG
-service. Lesson/flashcard/quiz *generation* still does not exist; existing
-debate/bill functionality is untouched.
+Status: **Increment 2 — Grounded Lesson Generator.** Adds `POST
+/lesson/generate`, producing a structured, section-cited lesson from
+retrieved bill sections. Flashcard/quiz generation still does not exist;
+existing debate/bill functionality is untouched.
 
 ## Why
 
@@ -96,11 +96,26 @@ Increment 1 adds:
   plus a retrieval-quality check against five hand-written queries over a
   known sample bill.
 
+Increment 2 adds:
+
+- `services/lesson_generation.py` — `LessonGenerationService.generate_lesson(bill_id,
+  bill_text, model=...)`, producing a `Lesson` (see updated table below).
+  Runs six separate `BillRagService` retrieval queries (purpose,
+  requirements, stakeholders, benefits, objections, implementation),
+  dedupes the results, and sends only those section excerpts to the model
+  -- never the full bill text.
+- `routes/lesson_routes.py` — `POST /lesson/generate`, added alongside the
+  Increment 1 endpoint in the same router (no further `main.py` changes
+  needed).
+- `tests/test_lesson_generation.py` — parsing/grounding-validation tests
+  (no network) plus `generate_lesson` tests against a mocked LLM callable
+  covering caching, cache invalidation (text change and prompt-version
+  bump), retry-on-missing-pro/con, and Firestore persistence via
+  `FakeFirestoreClient`.
+
 Future increments are expected to add:
 
-- `services/lesson_generation.py` for LLM-driven lesson/flashcard/quiz
-  generation (built on the existing `chains/` + OpenRouter pattern, using
-  `BillRagService` for grounding instead of full bill text).
+- Flashcard/quiz generation.
 - `frontend/src/components/lesson/` (or similar) for the new UI, following
   the existing flat-components convention.
 
@@ -118,7 +133,8 @@ All lesson-mode models inherit from a small `FirestoreModel` base
 | Model | Purpose | Key fields |
 |---|---|---|
 | `BillSection` | Unit of retrieval for the RAG pipeline | `section_id`, `bill_id`, `heading`, `text`, `order`, `embedding` |
-| `Lesson` | Generated lesson for a bill | `lesson_id`, `bill_id`, `summary`, `stakeholders`, `pro_arguments`, `con_arguments`, `created_at` |
+| `GroundedClaim` | A claim tied to the section_id(s) that support it | `claim`, `section_ids` (non-empty) |
+| `Lesson` | Generated, grounded lesson for a bill (Increment 2) | `lesson_id`, `bill_id`, `prompt_version`, `bill_text_hash`, `lesson_title`, `plain_language_summary`, `learning_objectives`, `major_provisions`, `stakeholders`, `pro_arguments`, `con_arguments` (all `List[GroundedClaim]`), `source_sections`, `created_at` |
 | `Flashcard` | Term/definition grounded in a bill section | `card_id`, `lesson_id`, `term`, `definition`, `section_id` |
 | `LeitnerBox` | `IntEnum` (1–5) documenting the Leitner box levels | — |
 | `UserCardProgress` | One user's Leitner progress on one flashcard | `user_id`, `card_id`, `leitner_box`, `correct_count`, `last_reviewed`, `next_review_session` |
@@ -150,9 +166,11 @@ overwrites the same document on repeated calls instead of creating
 duplicates.
 
 **Not yet done (by design):** `BillSection` results from Increment 1's RAG
-service are not yet persisted through `LessonRepository` -- the retrieval
-cache is in-memory only for now (see below). Wiring generated lessons into
-Firestore is scoped to Increment 2.
+service are still not persisted through `LessonRepository` -- the retrieval
+cache is in-memory only (see below). `Lesson` documents *are* persisted:
+`LessonGenerationService` calls `repo.create_lesson(...)` after grounding
+validation and uses `repo.get_lesson(lesson_id)` as its cache lookup (see
+Increment 2 section below).
 
 ## Bill-section RAG pipeline (`services/rag/`, Increment 1)
 
@@ -183,6 +201,52 @@ bill text -> split_bill_into_sections -> embed each section
 - Cache hits/misses and retrieval latency are logged via the standard
   `logging` module (`services/rag/retrieval_service.py`).
 
+## Grounded lesson generator (`services/lesson_generation.py`, Increment 2)
+
+`LessonGenerationService.generate_lesson(bill_id, bill_text, model=...)`
+produces a `Lesson`:
+
+```
+bill_id, bill_text -> 6 BillRagService queries (purpose, requirements,
+  stakeholders, benefits, objections, implementation) -> dedupe sections
+  -> prompt the model for structured JSON (citing only those section_ids)
+  -> validate with Pydantic -> drop/trim claims citing unknown section_ids
+  -> retry once if pro_arguments or con_arguments end up empty
+  -> Lesson, persisted + cached via LessonRepository
+```
+
+- **Caching**: `lesson_id = f"{bill_id}::{LESSON_PROMPT_VERSION}::{sha256(normalized bill_text)[:16]}"`.
+  `generate_lesson` checks `repo.get_lesson(lesson_id)` first; an unchanged
+  bill and unchanged `LESSON_PROMPT_VERSION` return the cached lesson
+  without calling the model. Changing the bill text or bumping
+  `LESSON_PROMPT_VERSION` (do this whenever the prompt wording changes)
+  produces a new `lesson_id` and forces regeneration.
+- **Grounding enforcement**: `ground_lesson_draft(raw_text, known_section_ids)`
+  parses the model's JSON (tolerating ` ```json ` fences) and, per claim,
+  keeps only the section_ids that were actually retrieved -- a claim with
+  no valid section_ids left is dropped entirely rather than kept uncited.
+  If the result has no `pro_arguments` or no `con_arguments`, one retry is
+  attempted with a corrective instruction; if still missing, generation
+  raises `LessonGenerationError` rather than returning an ungrounded or
+  one-sided lesson.
+- **Reuses `OpenRouterChat`** from `chains/debater_chain.py` (the existing
+  OpenRouter-backed LangChain chat model) for the actual model call, so
+  lesson generation goes through the same OpenRouter config/model routing
+  as debates. It does *not* reuse that module's multi-round markdown debate
+  *template* (`get_debater_chain`) -- that's built for a live back-and-forth
+  round structure with free-form prose output and strict word counts, the
+  wrong contract for single-shot structured JSON. The pro/con instructions
+  in `CORE_LESSON_SYSTEM_PROMPT` instead adapt that template's reasoning
+  style (only argue points the source text supports, weigh impact, engage
+  with substance) into the grounded-claim JSON shape.
+- **Testability**: the LLM call is injected as `llm_call: (system_prompt,
+  user_prompt, model) -> Awaitable[str]`, defaulting to the real
+  `OpenRouterChat`-based implementation. Tests inject a fake callable
+  returning canned JSON, so `tests/test_lesson_generation.py` never makes a
+  network call.
+- Endpoint: `POST /lesson/generate` (`bill_id`, `bill_text`, optional
+  `model`) returns the full `Lesson` JSON.
+
 ## Testing
 
 `tests/fake_firestore.py` implements the minimal subset of the
@@ -210,13 +274,15 @@ python -m pytest tests/ -v
 
 ## Non-goals for this increment
 
-- No lesson/flashcard/quiz *generation* logic (LLM prompts, pro/con
-  arguments, structured lesson output) -- that's Increment 2, built on top
-  of `BillRagService`.
+- No flashcard/quiz *generation* logic -- that's a future increment.
 - No frontend pages.
 - Retrieved `BillSection`s are not yet persisted through `LessonRepository`
-  (in-memory cache only).
+  (in-memory cache only); only generated `Lesson`s are persisted.
+- No changes to `chains/debater_chain.py` itself -- `OpenRouterChat` is
+  imported and reused as-is, not modified, so existing debate behavior is
+  unaffected.
 - No changes to any existing route, chain, or service in `main.py` besides
-  the two-line router mount (import + `app.include_router(lesson_router)`);
-  `billsearch.py`, `legiscan_service.py`, `ca_propositions_service.py`, and
+  the Increment 1 two-line router mount (import +
+  `app.include_router(lesson_router)`); `billsearch.py`,
+  `legiscan_service.py`, `ca_propositions_service.py`, and the rest of
   `chains/` are untouched.

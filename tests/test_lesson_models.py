@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from models.lesson_models import (
     BillSection,
+    GroundedClaim,
     Lesson,
     Flashcard,
     LeitnerBox,
@@ -43,16 +44,35 @@ def test_bill_section_valid_instance():
     assert section.embedding is None
 
 
+def test_grounded_claim_valid_instance():
+    claim = GroundedClaim(
+        claim="The bill expands eligibility to households below a specified income threshold.",
+        section_ids=["section-3"],
+    )
+    assert claim.section_ids == ["section-3"]
+
+
+def test_grounded_claim_rejects_empty_section_ids():
+    with pytest.raises(ValidationError):
+        GroundedClaim(claim="x", section_ids=[])
+
+
 def test_lesson_valid_instance():
     lesson = Lesson(
         lesson_id="hr1-lesson",
         bill_id="hr1",
-        summary="A bill about examples.",
-        stakeholders=["Students", "Teachers"],
-        pro_arguments=["Improves access"],
-        con_arguments=["Costly to implement"],
+        prompt_version="v1",
+        bill_text_hash="abc123",
+        lesson_title="Understanding the Example Act",
+        plain_language_summary="A bill about examples.",
+        learning_objectives=["Explain what the bill does"],
+        stakeholders=[GroundedClaim(claim="Students benefit", section_ids=["section-1"])],
+        pro_arguments=[GroundedClaim(claim="Improves access", section_ids=["section-2"])],
+        con_arguments=[GroundedClaim(claim="Costly to implement", section_ids=["section-3"])],
+        source_sections=["section-1", "section-2", "section-3"],
     )
     assert lesson.bill_id == "hr1"
+    assert lesson.stakeholders[0].claim == "Students benefit"
     assert isinstance(lesson.created_at, datetime)
 
 
@@ -114,7 +134,15 @@ def test_lesson_progress_valid_instance():
     "model_cls, kwargs",
     [
         (BillSection, {"bill_id": "hr1", "heading": "x", "text": "y", "order": 0}),  # missing section_id
-        (Lesson, {"bill_id": "hr1", "summary": "s"}),  # missing lesson_id
+        (
+            Lesson,
+            {
+                "bill_id": "hr1",
+                "prompt_version": "v1",
+                "bill_text_hash": "h",
+                "plain_language_summary": "s",
+            },
+        ),  # missing lesson_id (and lesson_title)
         (Flashcard, {"lesson_id": "l1", "term": "t", "definition": "d"}),  # missing card_id/section_id
         (UserCardProgress, {"card_id": "c1"}),  # missing user_id
         (QuizAttempt, {"user_id": "u1", "lesson_id": "l1", "score": 50}),  # missing attempt_id
@@ -160,7 +188,10 @@ def test_lesson_serializes_datetime_to_iso_string():
     lesson = Lesson(
         lesson_id="l1",
         bill_id="b1",
-        summary="s",
+        prompt_version="v1",
+        bill_text_hash="h",
+        lesson_title="t",
+        plain_language_summary="s",
         created_at=datetime(2026, 7, 20, 12, 0, tzinfo=timezone.utc),
     )
     data = lesson.to_firestore_dict()
@@ -211,11 +242,18 @@ def test_repository_get_bill_section_missing_returns_none(repo):
 
 
 def test_repository_create_and_get_lesson(repo):
-    lesson = Lesson(lesson_id="l1", bill_id="b1", summary="s")
+    lesson = Lesson(
+        lesson_id="l1",
+        bill_id="b1",
+        prompt_version="v1",
+        bill_text_hash="h",
+        lesson_title="t",
+        plain_language_summary="s",
+    )
     repo.create_lesson(lesson)
     fetched = repo.get_lesson("l1")
     assert fetched.lesson_id == "l1"
-    assert fetched.summary == "s"
+    assert fetched.plain_language_summary == "s"
 
 
 def test_repository_create_and_get_flashcard(repo):
