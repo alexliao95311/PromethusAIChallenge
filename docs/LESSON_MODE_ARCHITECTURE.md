@@ -1,8 +1,9 @@
 # Lesson Mode Architecture
 
-Status: **Increment 0 — Audit and Data Models.** Foundation only. No lesson
-routes, UI, or generation logic exist yet; existing debate/bill functionality
-is untouched.
+Status: **Increment 1 — Bill Section Retrieval and RAG.** Adds the first
+Lesson Mode API route (`POST /lesson/retrieve-sections`) and a reusable RAG
+service. Lesson/flashcard/quiz *generation* still does not exist; existing
+debate/bill functionality is untouched.
 
 ## Why
 
@@ -66,14 +67,40 @@ handlers, which import the repository, which would import back into
 first, so whichever one runs first initializes the Firebase app and the
 other just reuses it — safe to run side by side.
 
+Increment 1 adds:
+
+- `routes/lesson_routes.py` — `POST /lesson/retrieve-sections`, mounted from
+  `main.py` via `app.include_router(lesson_router)`.
+- `services/rag/section_splitter.py` — `split_bill_into_sections(bill_text,
+  bill_id)`, the canonical splitter producing `BillSection` chunks. This is
+  a distinct implementation from `main.py`'s `extract_key_bill_sections`
+  (line ~1200), which lossily truncates a bill into one string to fit an
+  LLM's context window and is unrelated to RAG chunking.
+- `services/rag/embeddings.py` — `EmbeddingProvider` interface with three
+  implementations: `SentenceTransformerEmbeddingProvider` (default: local,
+  semantic, no API key), `TfidfEmbeddingProvider` (dependency-light
+  fallback), and `OpenAIEmbeddingProvider` (hosted, opt-in). Selectable via
+  the `LESSON_EMBEDDING_PROVIDER` env var.
+- `services/rag/cache.py` — `EmbeddingCache` interface with an
+  `InMemoryEmbeddingCache` default, keyed by `bill_id` + a hash of the
+  whitespace-normalized bill text, so unchanged bills skip re-embedding and
+  changed bills transparently invalidate. A Firestore- or vector-DB-backed
+  cache can implement the same interface later without touching
+  `BillRagService`.
+- `services/rag/retrieval_service.py` — `BillRagService.retrieve_relevant_sections(bill_id, query, top_k=5, bill_text=None)`,
+  the single reusable entry point other increments should call instead of
+  sending a full bill to the model. Returns `section_id`, `heading`, `text`,
+  `order`, and `similarity_score` per section, ranked by cosine similarity.
+  Logs cache hits/misses and retrieval latency.
+- `tests/test_bill_rag.py` — splitter, cache, retrieval, and endpoint tests,
+  plus a retrieval-quality check against five hand-written queries over a
+  known sample bill.
+
 Future increments are expected to add:
 
-- `routes/lesson_routes.py` (or equivalent) wiring these models/repository
-  into FastAPI endpoints, imported and mounted from `main.py`.
-- `services/rag/` for bill-section splitting, embedding, caching, and
-  semantic retrieval.
 - `services/lesson_generation.py` for LLM-driven lesson/flashcard/quiz
-  generation (built on the existing `chains/` + OpenRouter pattern).
+  generation (built on the existing `chains/` + OpenRouter pattern, using
+  `BillRagService` for grounding instead of full bill text).
 - `frontend/src/components/lesson/` (or similar) for the new UI, following
   the existing flat-components convention.
 
@@ -122,9 +149,39 @@ deterministic `{user_id}_{...id}` document ID so `upsert_*` naturally
 overwrites the same document on repeated calls instead of creating
 duplicates.
 
-**Not yet done (by design):** no API routes call `LessonRepository`, and no
-frontend code references these models. That wiring is scoped to later
-increments once lesson generation exists to populate real data.
+**Not yet done (by design):** `BillSection` results from Increment 1's RAG
+service are not yet persisted through `LessonRepository` -- the retrieval
+cache is in-memory only for now (see below). Wiring generated lessons into
+Firestore is scoped to Increment 2.
+
+## Bill-section RAG pipeline (`services/rag/`, Increment 1)
+
+`BillRagService.retrieve_relevant_sections(bill_id, query, top_k=5,
+bill_text=None)` is the reusable entry point for finding the bill sections
+relevant to a query without sending the whole bill to a model:
+
+```
+bill text -> split_bill_into_sections -> embed each section
+          -> cache (keyed by bill_id + text hash) -> cosine similarity
+          -> top_k sections
+```
+
+- On first call for a `bill_id` (or after the bill's text changes), pass
+  `bill_text`; sections are split, embedded, and cached. Later calls can
+  omit `bill_text` and reuse the cached sections.
+- `EmbeddingProvider` is pluggable (`LESSON_EMBEDDING_PROVIDER` env var):
+  `sentence-transformers` (default, local, semantic) is not upended by
+  vocabulary mismatches the way TF-IDF is, e.g. matching "who qualifies"
+  against "eligibility requirements". `tfidf` and `openai` are also
+  available.
+- `EmbeddingCache` is an interface (`InMemoryEmbeddingCache` is the only
+  implementation today); a Firestore- or vector-DB-backed cache can be
+  swapped in later without changing `BillRagService`.
+- Endpoint: `POST /lesson/retrieve-sections` (`bill_id`, `query`, `top_k`,
+  optional `bill_text`) returns `section_id`, `heading`, `text`, `order`,
+  `similarity_score` per result.
+- Cache hits/misses and retrieval latency are logged via the standard
+  `logging` module (`services/rag/retrieval_service.py`).
 
 ## Testing
 
@@ -138,16 +195,28 @@ Firestore emulator client (`google.cloud.firestore.Client` pointed at
 since `LessonRepository` only depends on that same `collection/document/set/get`
 surface.
 
+`tests/test_bill_rag.py` covers the RAG pipeline: section splitting, cache
+hit/miss/invalidation behavior, top_k and ordering, validation errors, and
+a retrieval-quality check (five hand-written queries against a known sample
+bill, expecting the right section in the top 3), plus the
+`/lesson/retrieve-sections` endpoint mounted standalone (no `main.py`
+dependency chain required).
+
 Run the suite with:
 
 ```bash
-.venv/bin/python -m pytest tests/test_lesson_models.py -v
+python -m pytest tests/ -v
 ```
 
 ## Non-goals for this increment
 
-- No lesson/flashcard/quiz *generation* logic (LLM prompts, RAG retrieval).
-- No new API routes or frontend pages.
-- No changes to any existing route, chain, or service in `main.py`,
-  `billsearch.py`, `legiscan_service.py`, `ca_propositions_service.py`, or
-  `chains/`.
+- No lesson/flashcard/quiz *generation* logic (LLM prompts, pro/con
+  arguments, structured lesson output) -- that's Increment 2, built on top
+  of `BillRagService`.
+- No frontend pages.
+- Retrieved `BillSection`s are not yet persisted through `LessonRepository`
+  (in-memory cache only).
+- No changes to any existing route, chain, or service in `main.py` besides
+  the two-line router mount (import + `app.include_router(lesson_router)`);
+  `billsearch.py`, `legiscan_service.py`, `ca_propositions_service.py`, and
+  `chains/` are untouched.

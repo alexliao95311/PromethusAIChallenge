@@ -25,6 +25,7 @@ from chains.trainer_chain import get_trainer_chain
 from billsearch import BillSearcher
 from legiscan_service import LegiScanService
 from ca_propositions_service import CAPropositionsService
+from routes.lesson_routes import router as lesson_router
 
 # Initialize logging first
 logging.basicConfig(level=logging.INFO)
@@ -110,6 +111,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(lesson_router)
 
 # Models – now referencing the global DEFAULT_MODEL
 
