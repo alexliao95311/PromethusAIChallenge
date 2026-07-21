@@ -8,7 +8,7 @@ rollout plan and where each model will eventually be used.
 
 from datetime import datetime, timezone
 from enum import IntEnum
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -85,13 +85,19 @@ class Lesson(FirestoreModel):
 # ---------------------------------------------------------------------------
 
 class Flashcard(FirestoreModel):
-    """A term/definition card grounded in a specific bill section."""
+    """A bill-specific vocabulary card grounded in a single bill section
+    (Increment 3). `difficulty` reflects how conceptually hard the term is
+    for a high-school student, not its Leitner review state (see
+    `UserCardProgress`)."""
 
     card_id: str
     lesson_id: str
-    term: str
-    definition: str
+    term: str = Field(min_length=1, max_length=60)
+    simple_definition: str = Field(min_length=1)
+    bill_context: str = Field(min_length=1)
+    example: str = Field(min_length=1)
     section_id: str
+    difficulty: Literal["beginner", "intermediate", "advanced"] = "intermediate"
 
 
 class LeitnerBox(IntEnum):

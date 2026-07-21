@@ -1,9 +1,10 @@
 # Lesson Mode Architecture
 
-Status: **Increment 2 — Grounded Lesson Generator.** Adds `POST
-/lesson/generate`, producing a structured, section-cited lesson from
-retrieved bill sections. Flashcard/quiz generation still does not exist;
-existing debate/bill functionality is untouched.
+Status: **Increment 3 — Vocabulary Generation.** `POST /lesson/generate`
+can now optionally produce 0-12 bill-specific vocabulary cards alongside
+the lesson. Flashcard *review scheduling* (Leitner boxes) and quiz
+generation still do not exist; existing debate/bill functionality is
+untouched.
 
 ## Why
 
@@ -113,9 +114,30 @@ Increment 2 adds:
   bump), retry-on-missing-pro/con, and Firestore persistence via
   `FakeFirestoreClient`.
 
+Increment 3 adds:
+
+- `services/vocabulary_generation.py` — `VocabularyGenerationService.generate_vocabulary(bill_id,
+  lesson_id, bill_text, model=...)`, producing 0-12 `Flashcard`s (see
+  updated table below) from the same category-query retrieval used for
+  lesson generation. `services/json_utils.py` was factored out of
+  `lesson_generation.py` so both services share one JSON-fence-tolerant
+  parser instead of duplicating it.
+- `GenerateLessonRequest.include_vocabulary` (default `False`) on `POST
+  /lesson/generate`; when true, the response (`GenerateLessonResponse`, a
+  `Lesson` subclass) also includes a `vocabulary` list.
+- `regenerate_invalid_cards` — a standalone regeneration path: if any card
+  from the first pass cited an unretrieved section_id or was really a name/
+  section-number rather than a term, one follow-up model call asks
+  specifically for replacements, before falling back to just dropping them.
+- `tests/test_vocabulary_generation.py` — parsing/grounding/dedup/term-
+  quality/length-cap tests (no network) plus `generate_vocabulary` tests
+  against a mocked LLM callable, and the `/lesson/generate` endpoint with
+  and without `include_vocabulary`.
+
 Future increments are expected to add:
 
-- Flashcard/quiz generation.
+- Flashcard *review scheduling* (Leitner boxes, due dates, per-user
+  progress) and quiz generation.
 - `frontend/src/components/lesson/` (or similar) for the new UI, following
   the existing flat-components convention.
 
@@ -135,7 +157,7 @@ All lesson-mode models inherit from a small `FirestoreModel` base
 | `BillSection` | Unit of retrieval for the RAG pipeline | `section_id`, `bill_id`, `heading`, `text`, `order`, `embedding` |
 | `GroundedClaim` | A claim tied to the section_id(s) that support it | `claim`, `section_ids` (non-empty) |
 | `Lesson` | Generated, grounded lesson for a bill (Increment 2) | `lesson_id`, `bill_id`, `prompt_version`, `bill_text_hash`, `lesson_title`, `plain_language_summary`, `learning_objectives`, `major_provisions`, `stakeholders`, `pro_arguments`, `con_arguments` (all `List[GroundedClaim]`), `source_sections`, `created_at` |
-| `Flashcard` | Term/definition grounded in a bill section | `card_id`, `lesson_id`, `term`, `definition`, `section_id` |
+| `Flashcard` | Bill-specific vocabulary card, grounded in one section (Increment 3) | `card_id`, `lesson_id`, `term`, `simple_definition`, `bill_context`, `example`, `section_id`, `difficulty` (`beginner`\|`intermediate`\|`advanced`) |
 | `LeitnerBox` | `IntEnum` (1–5) documenting the Leitner box levels | — |
 | `UserCardProgress` | One user's Leitner progress on one flashcard | `user_id`, `card_id`, `leitner_box`, `correct_count`, `last_reviewed`, `next_review_session` |
 | `QuizAnswer` | One answer within a quiz attempt | `question_id`, `response`, `is_correct` |
@@ -247,6 +269,44 @@ bill_id, bill_text -> 6 BillRagService queries (purpose, requirements,
 - Endpoint: `POST /lesson/generate` (`bill_id`, `bill_text`, optional
   `model`) returns the full `Lesson` JSON.
 
+## Vocabulary generator (`services/vocabulary_generation.py`, Increment 3)
+
+`VocabularyGenerationService.generate_vocabulary(bill_id, lesson_id,
+bill_text, model=...)` produces `Flashcard`s:
+
+```
+bill_id, bill_text -> same 6 BillRagService category queries used for the
+  lesson -> prompt for 6-12 vocabulary cards (citing only retrieved
+  section_ids) -> ground_vocabulary_draft: term-quality filter + dedupe
+  (case-insensitive) + section_id validation + difficulty normalization +
+  definition length cap -> regenerate_invalid_cards (one retry, for
+  replacement terms only) -> persisted via LessonRepository.create_flashcard
+```
+
+- **Term-quality filtering** (`_is_educationally_valid_term`) rejects
+  terms under 2 or over 60 characters, pure numbers, and section-number-
+  shaped strings (e.g. "Section 3", "SEC. 6.") per requirement #2 -- these
+  are rejected even if the model cites a valid section_id, since the
+  problem is the term itself, not its grounding.
+- **Deduplication** is case-insensitive and applies both within one
+  generation call and against `existing_terms_lower` passed into
+  `regenerate_invalid_cards`, so a regeneration pass can't reintroduce a
+  term already accepted.
+- **No hard minimum**: unlike lesson pro/con arguments, ending up with
+  fewer than `MIN_CARDS` (6) -- or even zero -- is not an error. A bill
+  with little jargon may legitimately need fewer cards; `generate_vocabulary`
+  logs this rather than raising.
+- **Regeneration is a distinct, independently callable method**
+  (`regenerate_invalid_cards`), not just a retry loop inlined into
+  `generate_vocabulary` -- it takes the specific invalid terms and the
+  running set of accepted terms, and returns only newly grounded
+  replacement cards for the caller to merge in.
+- Endpoint: vocabulary is opt-in via `include_vocabulary: bool = False` on
+  `POST /lesson/generate`; the response is a `Lesson` subclass
+  (`GenerateLessonResponse`) with an added `vocabulary: Optional[List[Flashcard]]`
+  field, so the Increment 2 response shape (`lesson_title` etc. at the top
+  level) is unchanged when the flag is omitted.
+
 ## Testing
 
 `tests/fake_firestore.py` implements the minimal subset of the
@@ -266,6 +326,15 @@ bill, expecting the right section in the top 3), plus the
 `/lesson/retrieve-sections` endpoint mounted standalone (no `main.py`
 dependency chain required).
 
+`tests/test_vocabulary_generation.py` covers `ground_vocabulary_draft`
+(valid cards, unknown-section-id rejection, case-insensitive dedup within
+a batch and against `existing_terms_lower`, section-number/numeric term
+rejection, definition-length capping, difficulty normalization, max-cards
+capping, malformed JSON) and `generate_vocabulary` against a mocked LLM
+(persistence, the regenerate-invalid-cards path, returning fewer than
+`MIN_CARDS` without failing, and the `/lesson/generate` endpoint with and
+without `include_vocabulary`).
+
 Run the suite with:
 
 ```bash
@@ -274,10 +343,13 @@ python -m pytest tests/ -v
 
 ## Non-goals for this increment
 
-- No flashcard/quiz *generation* logic -- that's a future increment.
+- No flashcard *review scheduling* -- `UserCardProgress`/`LeitnerBox`
+  already exist as models (Increment 0) but nothing populates or advances
+  them yet; that's a future increment, along with quiz generation.
 - No frontend pages.
 - Retrieved `BillSection`s are not yet persisted through `LessonRepository`
-  (in-memory cache only); only generated `Lesson`s are persisted.
+  (in-memory cache only); generated `Lesson`s and their `Flashcard`s are
+  persisted.
 - No changes to `chains/debater_chain.py` itself -- `OpenRouterChat` is
   imported and reused as-is, not modified, so existing debate behavior is
   unaffected.

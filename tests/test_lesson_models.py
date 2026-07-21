@@ -81,10 +81,28 @@ def test_flashcard_valid_instance():
         card_id="card-1",
         lesson_id="hr1-lesson",
         term="Quorum",
-        definition="The minimum number of members required to conduct business.",
+        simple_definition="The minimum number of members required to conduct business.",
+        bill_context="This bill requires a quorum before votes on eligibility waivers.",
+        example="A committee of 10 needs 6 members present to have quorum.",
         section_id="hr1-sec-1",
+        difficulty="intermediate",
     )
     assert card.term == "Quorum"
+    assert card.difficulty == "intermediate"
+
+
+def test_flashcard_rejects_invalid_difficulty():
+    with pytest.raises(ValidationError):
+        Flashcard(
+            card_id="card-1",
+            lesson_id="hr1-lesson",
+            term="Quorum",
+            simple_definition="d",
+            bill_context="c",
+            example="e",
+            section_id="hr1-sec-1",
+            difficulty="expert",
+        )
 
 
 def test_user_card_progress_defaults():
@@ -143,7 +161,10 @@ def test_lesson_progress_valid_instance():
                 "plain_language_summary": "s",
             },
         ),  # missing lesson_id (and lesson_title)
-        (Flashcard, {"lesson_id": "l1", "term": "t", "definition": "d"}),  # missing card_id/section_id
+        (
+            Flashcard,
+            {"lesson_id": "l1", "term": "t", "simple_definition": "d", "bill_context": "c", "example": "e"},
+        ),  # missing card_id/section_id
         (UserCardProgress, {"card_id": "c1"}),  # missing user_id
         (QuizAttempt, {"user_id": "u1", "lesson_id": "l1", "score": 50}),  # missing attempt_id
         (PersonaProfile, {}),  # missing user_id
@@ -257,7 +278,15 @@ def test_repository_create_and_get_lesson(repo):
 
 
 def test_repository_create_and_get_flashcard(repo):
-    card = Flashcard(card_id="c1", lesson_id="l1", term="t", definition="d", section_id="s1")
+    card = Flashcard(
+        card_id="c1",
+        lesson_id="l1",
+        term="t",
+        simple_definition="d",
+        bill_context="c",
+        example="e",
+        section_id="s1",
+    )
     repo.create_flashcard(card)
     assert repo.get_flashcard("c1") == card
 

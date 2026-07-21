@@ -15,9 +15,7 @@ con instructions below adapt its "weigh comparatively, engage with the
 opponent's actual claims" reasoning style into that JSON shape instead.
 """
 
-import json
 import logging
-import re
 from typing import Awaitable, Callable, List, Optional, Set, Tuple
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -25,6 +23,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from chains.debater_chain import OpenRouterChat
 from models.lesson_models import GroundedClaim, Lesson
+from services.json_utils import extract_json_object
 from services.lesson_repository import LessonRepository
 from services.rag.cache import compute_text_hash
 from services.rag.retrieval_service import BillRagService, RetrievedSection
@@ -118,18 +117,6 @@ async def _default_llm_call(system_prompt: str, user_prompt: str, model: str) ->
     return message.content
 
 
-def _extract_json_object(raw_text: str) -> dict:
-    """Parse the model's response as JSON, tolerating ```json fences."""
-    text = raw_text.strip()
-    fence_match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
-    if fence_match:
-        text = fence_match.group(1)
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        raise LessonGenerationError(f"Model did not return valid JSON: {e}") from e
-
-
 def ground_lesson_draft(
     raw_text: str, known_section_ids: Set[str]
 ) -> Tuple[_LessonDraft, List[str]]:
@@ -142,9 +129,9 @@ def ground_lesson_draft(
     dropped rather than left uncited.
     """
     try:
-        data = _extract_json_object(raw_text)
+        data = extract_json_object(raw_text)
         draft = _LessonDraft.model_validate(data)
-    except (ValidationError, LessonGenerationError) as e:
+    except (ValidationError, ValueError) as e:
         raise LessonGenerationError(f"Model output failed schema validation: {e}") from e
 
     dropped: List[str] = []
