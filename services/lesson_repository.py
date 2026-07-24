@@ -182,6 +182,15 @@ class LessonRepository:
             return None
         return PersonaProfile.from_firestore_dict(doc.to_dict())
 
+    def delete_persona_profile(self, user_id: str) -> bool:
+        """Delete a user's persona. Returns True if a document was removed,
+        False if there was nothing to delete."""
+        ref = self.db.collection(COLLECTION_PERSONA_PROFILES).document(user_id)
+        if not ref.get().exists:
+            return False
+        ref.delete()
+        return True
+
     # -- LessonProgress ------------------------------------------------
     def upsert_lesson_progress(self, progress: LessonProgress) -> str:
         doc_id = _lesson_progress_doc_id(progress.user_id, progress.lesson_id)

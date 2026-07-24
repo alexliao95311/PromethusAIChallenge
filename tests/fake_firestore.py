@@ -29,6 +29,9 @@ class FakeDocumentRef:
     def get(self):
         return FakeDocumentSnapshot(self._store.get(self._doc_id))
 
+    def delete(self):
+        self._store.pop(self._doc_id, None)
+
 
 class FakeCollectionRef:
     def __init__(self, collection_store):
