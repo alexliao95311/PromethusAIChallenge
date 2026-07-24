@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from enum import IntEnum
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class FirestoreModel(BaseModel):
@@ -215,14 +215,212 @@ class OpenResponseAttempt(FirestoreModel):
 # Personalization
 # ---------------------------------------------------------------------------
 
+# US states + DC, keyed by the two-letter USPS code we store. State is the
+# only geographic field we collect -- never a city, address, or ZIP.
+US_STATES: dict = {
+    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
+    "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware",
+    "DC": "District of Columbia", "FL": "Florida", "GA": "Georgia", "HI": "Hawaii",
+    "ID": "Idaho", "IL": "Illinois", "IN": "Indiana", "IA": "Iowa",
+    "KS": "Kansas", "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine",
+    "MD": "Maryland", "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota",
+    "MS": "Mississippi", "MO": "Missouri", "MT": "Montana", "NE": "Nebraska",
+    "NV": "Nevada", "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico",
+    "NY": "New York", "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio",
+    "OK": "Oklahoma", "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island",
+    "SC": "South Carolina", "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas",
+    "UT": "Utah", "VT": "Vermont", "VA": "Virginia", "WA": "Washington",
+    "WV": "West Virginia", "WI": "Wisconsin", "WY": "Wyoming",
+}
+
+# Broad ranges only -- deliberately never an exact age.
+AGE_RANGES: List[str] = [
+    "Under 18", "18-24", "25-34", "35-44", "45-54", "55-64", "65+",
+]
+
+# Broad household-income brackets only -- deliberately never an exact figure.
+INCOME_BRACKETS: List[str] = [
+    "Under $25,000",
+    "$25,000-$49,999",
+    "$50,000-$99,999",
+    "$100,000-$199,999",
+    "$200,000 or more",
+]
+
+# Broad occupation categories the UI offers as chips. Occupation is the one
+# field that also accepts free text (a student may type a specific role or an
+# intended future occupation), so this list is a suggestion set, not a
+# closed enum -- see `PersonaProfile.occupation`.
+OCCUPATION_CATEGORIES: List[str] = [
+    "Student",
+    "Educator",
+    "Healthcare",
+    "Service industry",
+    "Skilled trades",
+    "Technology",
+    "Business or finance",
+    "Government or public sector",
+    "Arts or media",
+    "Retired",
+    "Not currently working",
+    "Other",
+]
+
+OCCUPATION_MAX_LENGTH = 80
+
+
 class PersonaProfile(FirestoreModel):
-    """A lightweight persona the student builds for personalized lessons."""
+    """A lightweight, optional persona a student builds for personalized
+    lessons (Increment 7).
+
+    Every field except ``user_id`` is optional -- a student may fill in one
+    field, all of them, or none, and the persona may be entirely fictional.
+    By design this model collects only *broad* attributes and deliberately
+    has no field for exact age, exact income, home address, employer name,
+    race, religion, health information, or political affiliation.
+
+    ``state`` is stored as a two-letter USPS code; ``age_range`` and
+    ``income_bracket`` must be one of the broad predefined choices
+    (``AGE_RANGES`` / ``INCOME_BRACKETS``). ``occupation`` accepts either a
+    broad category from ``OCCUPATION_CATEGORIES`` or free text (e.g. an
+    intended future role), capped at ``OCCUPATION_MAX_LENGTH`` characters.
+    """
 
     user_id: str
     occupation: Optional[str] = None
     state: Optional[str] = None
     age_range: Optional[str] = None
     income_bracket: Optional[str] = None
+
+    @field_validator("occupation", mode="before")
+    @classmethod
+    def _normalize_occupation(cls, value):
+        if value is None:
+            return None
+        value = str(value).strip()
+        if not value:
+            return None
+        if len(value) > OCCUPATION_MAX_LENGTH:
+            raise ValueError(
+                f"occupation must be at most {OCCUPATION_MAX_LENGTH} characters"
+            )
+        return value
+
+    @field_validator("state", mode="before")
+    @classmethod
+    def _normalize_state(cls, value):
+        if value is None:
+            return None
+        value = str(value).strip().upper()
+        if not value:
+            return None
+        if value not in US_STATES:
+            raise ValueError(f"state must be a two-letter US state code, got {value!r}")
+        return value
+
+    @field_validator("age_range", mode="before")
+    @classmethod
+    def _validate_age_range(cls, value):
+        if value is None:
+            return None
+        value = str(value).strip()
+        if not value:
+            return None
+        if value not in AGE_RANGES:
+            raise ValueError(f"age_range must be one of {AGE_RANGES}, got {value!r}")
+        return value
+
+    @field_validator("income_bracket", mode="before")
+    @classmethod
+    def _validate_income_bracket(cls, value):
+        if value is None:
+            return None
+        value = str(value).strip()
+        if not value:
+            return None
+        if value not in INCOME_BRACKETS:
+            raise ValueError(
+                f"income_bracket must be one of {INCOME_BRACKETS}, got {value!r}"
+            )
+        return value
+
+    def is_empty(self) -> bool:
+        """True when the student saved a persona with no attributes at all."""
+        return not any(
+            (self.occupation, self.state, self.age_range, self.income_bracket)
+        )
+
+    def to_impact_representation(self) -> dict:
+        """A stable, self-describing representation for the (future)
+        personal-impact generator (Increment 8).
+
+        Returns the structured attributes that are set, a plain-language
+        descriptor the generator can drop into a prompt, and an explicit
+        ``is_fictional`` flag so downstream code never treats the persona as
+        verified personal data. Never raises; unset fields are simply omitted.
+        """
+        attributes: dict = {}
+        if self.occupation:
+            attributes["occupation"] = self.occupation
+        if self.state:
+            attributes["state"] = self.state
+            attributes["state_name"] = US_STATES[self.state]
+        if self.age_range:
+            attributes["age_range"] = self.age_range
+        if self.income_bracket:
+            attributes["income_bracket"] = self.income_bracket
+
+        parts: List[str] = []
+        if self.occupation:
+            parts.append(f"works or intends to work in {self.occupation.lower()}")
+        if self.state:
+            parts.append(f"lives in {US_STATES[self.state]}")
+        if self.age_range:
+            parts.append(f"is in the {self.age_range} age range")
+        if self.income_bracket:
+            parts.append(f"has a household income of {self.income_bracket}")
+
+        if parts:
+            descriptor = "A person who " + ", ".join(parts) + "."
+        else:
+            descriptor = ""
+
+        return {
+            "has_persona": bool(attributes),
+            "attributes": attributes,
+            "descriptor": descriptor,
+            # Personas are explicitly allowed to be fictional; the generator
+            # must not present impacts as factual claims about a real person.
+            "is_fictional": True,
+        }
+
+    @staticmethod
+    def field_options() -> dict:
+        """The choice sets and privacy disclaimer the persona builder UI needs.
+
+        Kept next to the model so the frontend's dropdowns and the backend's
+        validation can never drift apart.
+        """
+        return {
+            "occupation_suggestions": list(OCCUPATION_CATEGORIES),
+            "occupation_allows_custom": True,
+            "occupation_max_length": OCCUPATION_MAX_LENGTH,
+            "states": [{"code": c, "name": n} for c, n in US_STATES.items()],
+            "age_ranges": list(AGE_RANGES),
+            "income_brackets": list(INCOME_BRACKETS),
+            "all_fields_optional": True,
+            "persona_may_be_fictional": True,
+            "not_collected": [
+                "exact age",
+                "exact income",
+                "home address",
+                "employer name",
+                "race",
+                "religion",
+                "health information",
+                "political affiliation",
+            ],
+        }
 
 
 class LessonProgress(FirestoreModel):
