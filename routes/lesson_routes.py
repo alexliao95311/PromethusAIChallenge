@@ -13,9 +13,17 @@ import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
-from models.lesson_models import Flashcard, Lesson, OpenResponseAttempt, QuizAnswer, QuizAttempt
+from models.lesson_models import (
+    Flashcard,
+    Lesson,
+    OpenResponseAttempt,
+    PersonaProfile,
+    PersonalImpact,
+    QuizAnswer,
+    QuizAttempt,
+)
 from services.auth import get_current_user_id
 from services.flashcard_review import (
     CardNotInLessonError,
@@ -33,6 +41,10 @@ from services.open_response_generation import (
     OpenResponseGenerationService,
 )
 from services.open_response_grading import OpenResponseGradingError, OpenResponseGradingService
+from services.persona_impact_generation import (
+    PersonaImpactGenerationError,
+    PersonaImpactGenerationService,
+)
 from services.persona_service import PersonaService, PersonaValidationError
 from services.quiz_generation import QuizGenerationError, QuizGenerationService
 from services.rag.retrieval_service import BillNotCachedError, BillRagService, RetrievedSection
@@ -54,6 +66,9 @@ _open_response_generation_service = OpenResponseGenerationService(
 )
 _open_response_grading_service = OpenResponseGradingService()
 _persona_service = PersonaService(repository=_lesson_generation_service.repository)
+_persona_impact_service = PersonaImpactGenerationService(
+    rag_service=_rag_service, repository=_lesson_generation_service.repository
+)
 
 
 class RetrieveSectionsRequest(BaseModel):
@@ -576,3 +591,98 @@ async def delete_persona(user_id: str = Depends(get_current_user_id)):
         logger.error(f"Error in DELETE /lesson/persona: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error deleting persona")
     return {"deleted": deleted}
+
+
+# ---------------------------------------------------------------------------
+# Personalized bill-impact narrative (Increment 8)
+#
+# Grounded, persona-specific explanation of how a bill could affect a student.
+# Auth is required: the narrative is built from the caller's persona (their
+# saved one, or an inline possibly-fictional override) and persisted under
+# their uid. The lesson must already have been generated.
+# ---------------------------------------------------------------------------
+
+class PersonaOverride(BaseModel):
+    """An inline, possibly-fictional persona so a student can explore impacts
+    without first saving one. Same broad, optional fields as PersonaProfile."""
+
+    occupation: Optional[str] = None
+    state: Optional[str] = None
+    age_range: Optional[str] = None
+    income_bracket: Optional[str] = None
+
+
+class PersonalImpactRequest(BaseModel):
+    lesson_id: str = Field(..., min_length=1)
+    # Supplied when the bill isn't already cached in this process's RAG store.
+    bill_text: Optional[str] = None
+    # If omitted, the caller's saved persona (Increment 7) is used.
+    persona: Optional[PersonaOverride] = None
+    model: str = DEFAULT_LESSON_MODEL
+
+
+class PersonalImpactResponse(BaseModel):
+    impact_id: str
+    lesson_id: str
+    bill_id: str
+    persona: dict
+    narrative: str
+    direct_impacts: List[PersonalImpact]
+    possible_indirect_impacts: List[PersonalImpact]
+    uncertainties: List[str]
+    questions_to_consider: List[str]
+    confidence: str
+    section_ids: List[str]
+
+
+@router.post("/personal-impact", response_model=PersonalImpactResponse)
+async def personal_impact(
+    request: PersonalImpactRequest, user_id: str = Depends(get_current_user_id)
+):
+    logger.info(
+        "POST /lesson/personal-impact user_id=%s lesson_id=%s inline_persona=%s",
+        user_id, request.lesson_id, request.persona is not None,
+    )
+    lesson = _get_lesson_or_404(request.lesson_id)
+
+    # Resolve the persona: an inline (possibly fictional) override wins;
+    # otherwise fall back to the caller's saved persona. Either way the uid
+    # comes from the verified token, never the request body.
+    if request.persona is not None:
+        try:
+            persona = PersonaProfile(user_id=user_id, **request.persona.model_dump())
+        except ValidationError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+    else:
+        persona = _persona_service.get_persona(user_id)
+        if persona is None:
+            raise HTTPException(
+                status_code=400,
+                detail="No persona found. Save a persona first, or supply one in the request.",
+            )
+
+    try:
+        narrative = await _persona_impact_service.generate_impact(
+            persona=persona, lesson=lesson, bill_text=request.bill_text, model=request.model
+        )
+    except PersonaImpactGenerationError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in /lesson/personal-impact: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generating personal impact")
+
+    return PersonalImpactResponse(
+        impact_id=narrative.impact_id,
+        lesson_id=narrative.lesson_id,
+        bill_id=narrative.bill_id,
+        persona=narrative.persona,
+        narrative=narrative.narrative,
+        direct_impacts=narrative.direct_impacts,
+        possible_indirect_impacts=narrative.possible_indirect_impacts,
+        uncertainties=narrative.uncertainties,
+        questions_to_consider=narrative.questions_to_consider,
+        confidence=narrative.confidence,
+        section_ids=narrative.section_ids,
+    )
