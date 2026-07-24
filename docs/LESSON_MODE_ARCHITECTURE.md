@@ -1,10 +1,13 @@
 # Lesson Mode Architecture
 
-Status: **Increment 6 — Open-Response Grading.** Adds one grounded
-open-ended question per lesson plus a two-stage grader (a deterministic
-local pre-check, then an LLM rubric grader at temperature=0), scoring
-0-3 with specific, answer-referencing feedback. Flashcard/quiz analytics
-still do not exist; existing debate/bill functionality is untouched.
+Status: **Increment 7 — Student Persona Builder.** Adds an optional,
+possibly-fictional persona a student can build before a lesson (occupation
+or role, state, age *range*, income *bracket* — all optional, all broad).
+The persona is saved only on an explicit authenticated call and can be
+edited or deleted; it exposes an `impact_representation` for the (future)
+personal-impact generator, but no impact narrative is generated yet.
+Flashcard/quiz analytics still do not exist; existing debate/bill
+functionality is untouched.
 
 ## Why
 
@@ -222,8 +225,30 @@ Increment 6 adds:
   `frontend/src/components/LessonOpenResponse.test.jsx` (frontend) -- see
   Testing.
 
-Future increments are expected to add: a full Lesson Mode page/route that
-actually mounts `LessonFlashcards`/`LessonQuiz`/`LessonOpenResponse` (no
+Increment 7 adds:
+
+- `services/persona_service.py` — `PersonaService` with `get_persona`,
+  `save_persona` (validate + upsert; raises `PersonaValidationError` on bad
+  input), `delete_persona`, and `field_options`. See "Student persona
+  builder" below.
+- Broad-choice constants + Pydantic `field_validator`s on `PersonaProfile`
+  (`US_STATES`, `AGE_RANGES`, `INCOME_BRACKETS`, `OCCUPATION_CATEGORIES`),
+  plus `PersonaProfile.to_impact_representation()`, `is_empty()`, and
+  `field_options()`.
+- `LessonRepository.delete_persona_profile(user_id)` (and a `.delete()`
+  method on `tests/fake_firestore.py`'s document ref).
+- Persona routes on the lesson router: `GET /lesson/persona/options`
+  (public), `GET`/`PUT`/`DELETE /lesson/persona` (auth).
+- `frontend/src/components/PersonaBuilder.jsx` (+ `.css`) and the four
+  persona API helpers in `frontend/src/api.js`.
+- `tests/test_persona_service.py`, `tests/test_persona_routes.py` (backend)
+  and `frontend/src/components/PersonaBuilder.test.jsx` (frontend) -- see
+  Testing.
+
+Future increments are expected to add: the personal-impact generator that
+consumes `PersonaProfile.to_impact_representation()` (Increment 8), and a
+full Lesson Mode page/route that actually mounts
+`LessonFlashcards`/`LessonQuiz`/`LessonOpenResponse`/`PersonaBuilder` (no
 such page exists yet -- see Non-goals).
 
 ## Data models (`models/lesson_models.py`)
@@ -250,7 +275,7 @@ All lesson-mode models inherit from a small `FirestoreModel` base
 | `QuizAttempt` | A user's full quiz attempt for a lesson | `attempt_id`, `user_id`, `lesson_id`, `score`, `answers`, `feedback`, `created_at` |
 | `OpenResponseQuestion` | The lesson's one open-ended question (Increment 6) | `question_id`, `lesson_id`, `question`, `question_type` (`stakeholder_perspective`\|`tradeoff`\|`pro_con_comparison`\|`implementation_challenge`\|`impact_prediction`), `expected_points`, `section_ids`, `context_excerpt` |
 | `OpenResponseAttempt` | A user's graded attempt at that question | `attempt_id`, `user_id`, `lesson_id`, `question_id`, `student_answer`, `score` (0-3), `feedback`, `missed_points`, `accurate_points`, `section_ids`, `created_at` |
-| `PersonaProfile` | Student-built persona for personalization | `user_id`, `occupation`, `state`, `age_range`, `income_bracket` |
+| `PersonaProfile` | Student-built, optional, possibly-fictional persona for personalization (Increment 7) | `user_id`, `occupation` (broad category or free text, ≤80 chars), `state` (two-letter USPS code), `age_range` (one of `AGE_RANGES`), `income_bracket` (one of `INCOME_BRACKETS`) — every field except `user_id` optional; `to_impact_representation()` yields the generator-facing view |
 | `LessonProgress` | Overall per-user progress on a lesson | `user_id`, `lesson_id`, `vocab_mastered`, `vocab_total`, `quiz_attempts`, `best_quiz_score`, `completed`, `current_session` (Increment 4: Leitner session counter), `updated_at` |
 
 Validation is enforced via Pydantic field constraints (e.g. `BillSection.text`
@@ -581,6 +606,54 @@ student_answer -> local_precheck (blank / too short / copied-the-question /
   (auth required) grades the answer, saves an `OpenResponseAttempt`, and
   returns the full grade -- score, feedback, missed/accurate points, and
   section_ids -- immediately in the same response.
+
+## Student persona builder (Increment 7)
+
+```
+GET  /lesson/persona/options  (public)  -> broad choice sets + privacy
+  disclaimer (states, age ranges, income brackets, occupation suggestions,
+  and the explicit `not_collected` list) so the builder UI and backend
+  validation share one source of truth (PersonaProfile.field_options()).
+
+GET    /lesson/persona           (auth) -> the caller's saved persona, or
+  { has_persona: false }
+PUT    /lesson/persona           (auth) -> validate + upsert (create/edit),
+  returns the persona + impact_representation
+DELETE /lesson/persona           (auth) -> delete; { deleted: bool }
+```
+
+- **Optional and possibly fictional by design.** Every field except
+  `user_id` is optional: a student can save a persona with a single field,
+  or skip persona creation entirely (the frontend simply never calls
+  `PUT` — nothing is persisted implicitly). The UI states plainly that the
+  persona may be fictional.
+- **Broad choices only, no sensitive data.** `state` is stored as a
+  two-letter USPS code; `age_range`/`income_bracket` must be one of the
+  predefined broad ranges; `occupation` accepts a broad category *or* free
+  text (a current or intended role), capped at 80 chars. The model
+  deliberately has **no** field for exact age, exact income, home address,
+  employer, race, religion, health, or political affiliation, and
+  `field_options().not_collected` surfaces that list to the UI. Validation
+  lives on the `PersonaProfile` model (Pydantic `field_validator`s), so a
+  direct repository write and the service reject the same bad input;
+  `PersonaService.save_persona` re-raises validation failures as
+  `PersonaValidationError` (HTTP 422).
+- **Per-user and auth-gated.** The persona is keyed by the verified `uid`
+  from the Firebase token (never a request body), so read/save/delete only
+  ever touch the caller's own document and a save is naturally an upsert
+  (editing overwrites in place). `LessonRepository.delete_persona_profile`
+  returns whether a document existed.
+- **Generator-facing representation, but no narrative yet.**
+  `PersonaProfile.to_impact_representation()` returns the set attributes, a
+  plain-language `descriptor`, and an explicit `is_fictional: true` flag for
+  the (future, Increment 8) personal-impact generator to consume. This
+  increment generates no impact narrative.
+- **Frontend**: `frontend/src/components/PersonaBuilder.jsx` — accessible
+  labelled fields (`<label htmlFor>`, `aria-describedby`, `aria-invalid`,
+  `role="alert"`/`role="status"`), a "Prefer not to say" default on every
+  dropdown, a free-text occupation with a `<datalist>` of suggestions and
+  a length check, and Save (auth-gated) / Skip / Delete actions. Saving is
+  disabled with a sign-in prompt when the user is not authenticated.
 
 ## Testing
 
