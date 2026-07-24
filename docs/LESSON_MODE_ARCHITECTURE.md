@@ -1,10 +1,10 @@
 # Lesson Mode Architecture
 
-Status: **Increment 5 — Multiple-Choice Quiz Generation.** Adds grounded
-quiz generation (5-8 questions per lesson, embedding-first distractor
-pipeline with an LLM fallback), quiz-taking/scoring endpoints, and a React
-quiz page. Open-response grading and flashcard/quiz analytics still do not
-exist; existing debate/bill functionality is untouched.
+Status: **Increment 6 — Open-Response Grading.** Adds one grounded
+open-ended question per lesson plus a two-stage grader (a deterministic
+local pre-check, then an LLM rubric grader at temperature=0), scoring
+0-3 with specific, answer-referencing feedback. Flashcard/quiz analytics
+still do not exist; existing debate/bill functionality is untouched.
 
 ## Why
 
@@ -188,9 +188,43 @@ Increment 5 adds:
 - `tests/test_quiz_generation.py` (backend) and
   `frontend/src/components/LessonQuiz.test.jsx` (frontend) -- see Testing.
 
-Future increments are expected to add: open-response grading, and a full
-Lesson Mode page/route that actually mounts `LessonFlashcards`/`LessonQuiz`
-(no such page exists yet -- see Non-goals).
+Increment 6 adds:
+
+- `services/open_response_generation.py` — `OpenResponseGenerationService.generate_question(lesson_id,
+  model=...)`, producing the lesson's single `OpenResponseQuestion`.
+  `_select_question_material` picks the richest available question type
+  from the lesson's own grounded content -- `pro_con_comparison` when both
+  pro and con arguments exist (most substantive), else `stakeholder_perspective`,
+  else `implementation_challenge` (reusing quiz generation's
+  `_classify_provision_type` keyword heuristic), else `impact_prediction` --
+  and, like quiz generation, never invents the underlying facts. A single
+  model call phrases the question text and a 2-4 item `expected_points`
+  grading checklist from those facts. Idempotent: a lesson has at most one
+  such question, so a second call reuses the existing one instead of
+  regenerating.
+- `services/open_response_grading.py` — `OpenResponseGradingService.grade_answer(question,
+  student_answer, model=...)`, the two-stage grader described in "Grading"
+  below.
+- `Lesson.open_response_question_id` (new field, singular -- not a list,
+  since there's exactly one question per lesson), persisted by
+  `OpenResponseGenerationService.generate_question` itself.
+- `GenerateLessonRequest.include_open_response` (default `False`) on `POST
+  /lesson/generate`, alongside two new endpoints: `GET /lesson/{lesson_id}/open-response`
+  (public shape -- no `expected_points`/`context_excerpt`) and `POST
+  /lesson/{lesson_id}/open-response/submit` (requires
+  `Depends(get_current_user_id)`; grades the answer, saves an
+  `OpenResponseAttempt`, and returns the grade immediately).
+- `frontend/src/components/LessonOpenResponse.jsx` (+ `.css`) — a textarea,
+  a submit button, and a feedback view (score badge, feedback text,
+  accurate/missed points, relevant sections, and a "Try Again" reset).
+- `tests/test_open_response_generation.py`, `tests/test_open_response_grading.py`,
+  `tests/test_open_response_routes.py` (backend) and
+  `frontend/src/components/LessonOpenResponse.test.jsx` (frontend) -- see
+  Testing.
+
+Future increments are expected to add: a full Lesson Mode page/route that
+actually mounts `LessonFlashcards`/`LessonQuiz`/`LessonOpenResponse` (no
+such page exists yet -- see Non-goals).
 
 ## Data models (`models/lesson_models.py`)
 
@@ -207,13 +241,15 @@ All lesson-mode models inherit from a small `FirestoreModel` base
 |---|---|---|
 | `BillSection` | Unit of retrieval for the RAG pipeline | `section_id`, `bill_id`, `heading`, `text`, `order`, `embedding` |
 | `GroundedClaim` | A claim tied to the section_id(s) that support it | `claim`, `section_ids` (non-empty) |
-| `Lesson` | Generated, grounded lesson for a bill (Increment 2) | `lesson_id`, `bill_id`, `prompt_version`, `bill_text_hash`, `lesson_title`, `plain_language_summary`, `learning_objectives`, `major_provisions`, `stakeholders`, `pro_arguments`, `con_arguments` (all `List[GroundedClaim]`), `source_sections`, `vocabulary_card_ids` (Increment 4), `quiz_question_ids` (Increment 5), `created_at` |
+| `Lesson` | Generated, grounded lesson for a bill (Increment 2) | `lesson_id`, `bill_id`, `prompt_version`, `bill_text_hash`, `lesson_title`, `plain_language_summary`, `learning_objectives`, `major_provisions`, `stakeholders`, `pro_arguments`, `con_arguments` (all `List[GroundedClaim]`), `source_sections`, `vocabulary_card_ids` (Increment 4), `quiz_question_ids` (Increment 5), `open_response_question_id` (Increment 6, singular), `created_at` |
 | `Flashcard` | Bill-specific vocabulary card, grounded in one section (Increment 3) | `card_id`, `lesson_id`, `term`, `simple_definition`, `bill_context`, `example`, `section_id`, `difficulty` (`beginner`\|`intermediate`\|`advanced`) |
 | `LeitnerBox` | `IntEnum` (1–3, Increment 4) documenting the Leitner box levels | — |
 | `UserCardProgress` | One user's Leitner progress on one flashcard (Increment 4 shape) | `user_id`, `card_id`, `leitner_box` (1-3), `correct_count`, `incorrect_count`, `last_reviewed_session`, `next_due_session` |
 | `QuizQuestion` | A grounded multiple-choice question (Increment 5) | `question_id`, `lesson_id`, `question`, `answer_choices` (4, order randomized), `correct_answer_index`, `explanation`, `section_ids`, `difficulty`, `question_type` (`vocabulary`\|`stakeholder_impact`\|`provision`\|`implementation`) |
 | `QuizAnswer` | One answer within a quiz attempt | `question_id`, `response` (the selected index, as a string), `is_correct` |
 | `QuizAttempt` | A user's full quiz attempt for a lesson | `attempt_id`, `user_id`, `lesson_id`, `score`, `answers`, `feedback`, `created_at` |
+| `OpenResponseQuestion` | The lesson's one open-ended question (Increment 6) | `question_id`, `lesson_id`, `question`, `question_type` (`stakeholder_perspective`\|`tradeoff`\|`pro_con_comparison`\|`implementation_challenge`\|`impact_prediction`), `expected_points`, `section_ids`, `context_excerpt` |
+| `OpenResponseAttempt` | A user's graded attempt at that question | `attempt_id`, `user_id`, `lesson_id`, `question_id`, `student_answer`, `score` (0-3), `feedback`, `missed_points`, `accurate_points`, `section_ids`, `created_at` |
 | `PersonaProfile` | Student-built persona for personalization | `user_id`, `occupation`, `state`, `age_range`, `income_bracket` |
 | `LessonProgress` | Overall per-user progress on a lesson | `user_id`, `lesson_id`, `vocab_mastered`, `vocab_total`, `quiz_attempts`, `best_quiz_score`, `completed`, `current_session` (Increment 4: Leitner session counter), `updated_at` |
 
@@ -496,6 +532,56 @@ Lesson + its Flashcards -> build_fact_pool (vocabulary/stakeholder/
   immediately in the same response -- no separate "reveal explanation"
   round-trip.
 
+## Open-response question and grading (Increment 6)
+
+```
+Lesson's own grounded content -> _select_question_material (pick the
+  richest available type + underlying claims) -> one model call phrases
+  question + expected_points -> OpenResponseQuestion, persisted +
+  linked via Lesson.open_response_question_id (idempotent: one per lesson)
+
+student_answer -> local_precheck (blank / too short / copied-the-question /
+  embedding-irrelevant -> deterministic score 0, no model call) -> if none
+  fire: one model call at temperature=0 against expected_points +
+  context_excerpt -> ground_grade_draft (validate score 0-3, filter
+  section_ids to the question's own) -> OpenResponseGrade
+```
+
+- **Generation reuses quiz generation's grounding discipline**: `_select_question_material`
+  picks `pro_con_comparison` (needs both pro and con arguments -- the
+  richest material), else `stakeholder_perspective`, else
+  `implementation_challenge` (reusing `quiz_generation._classify_provision_type`),
+  else `impact_prediction`, pulling straight from `Lesson.pro_arguments`/`con_arguments`/`stakeholders`/`major_provisions`
+  -- never inventing the underlying facts, only phrasing them into a
+  question + a short `expected_points` grading checklist.
+- **The local pre-check is the main novel piece of "grading" logic.**
+  `_is_blank`, `_is_too_short` (`< 4` words or `< 15` chars),
+  `_is_copied_from_question` (`difflib.SequenceMatcher` ratio `>= 0.85`
+  against the question text), and `_is_irrelevant` (embedding cosine
+  similarity between the answer and `question + expected_points` `< 0.15`,
+  via the same `services.rag.embeddings.get_embedding_provider` used
+  elsewhere) all fire *before* any model call -- cheaper and perfectly
+  stable for these degenerate cases. Crucially, the pre-check only screens
+  for degenerate input, never reasoning quality or writing style: an
+  informal-but-on-topic or a correct-conclusion-with-wrong-reasoning answer
+  both pass through untouched to the real grader (see
+  `tests/test_open_response_grading.py`'s edge-case tests).
+- **Deterministic model settings**: unlike lesson/vocabulary/quiz
+  generation's temperature=0.3 (there's a creative-writing goal there),
+  `_default_grading_llm_call` uses temperature=0 -- there's only a rubric to
+  apply consistently, not prose to vary.
+- **Grounding**: the grading prompt supplies only `question.context_excerpt`
+  (the same underlying claim text the question itself was built from) as
+  "the supplied bill sections," and `ground_grade_draft` drops any
+  `section_ids` the model cites outside `question.section_ids`. One retry
+  is attempted on unparseable JSON before raising `OpenResponseGradingError`.
+- Endpoints: `GET /lesson/{lesson_id}/open-response` returns the public
+  shape (no `expected_points`/`context_excerpt`, so the rubric isn't given
+  away before answering); `POST /lesson/{lesson_id}/open-response/submit`
+  (auth required) grades the answer, saves an `OpenResponseAttempt`, and
+  returns the full grade -- score, feedback, missed/accurate points, and
+  section_ids -- immediately in the same response.
+
 ## Testing
 
 `tests/fake_firestore.py` implements the minimal subset of the
@@ -554,6 +640,29 @@ is answered, submitting and showing the score, immediate per-question
 explanations after submission, locking answers post-submission, and a
 load-error state.
 
+`tests/test_open_response_generation.py` covers question-type selection
+priority (pro/con > stakeholders > implementation > generic provisions,
+and the "no content at all" case), draft parsing, end-to-end generation
+against a scripted LLM, persistence + linking onto `Lesson.open_response_question_id`,
+and idempotency (a second call reuses the existing question without a new
+model call). `tests/test_open_response_grading.py` covers the local
+pre-check in isolation (blank, whitespace-only, one-word, very-short,
+copied-the-question, and semantically-irrelevant answers all score 0
+without a model call; a full-length relevant answer and an informal-but-
+on-topic answer both pass through) plus the fixed test set required by the
+spec -- complete, mostly-correct, partial, and irrelevant sample answers,
+each checked for a stable score across repeated runs -- and the edge cases
+(blank, one-word, long-but-irrelevant, informal-but-correct, and
+correct-conclusion-with-wrong-reasoning, the last two confirmed to reach
+the real grader rather than being pre-filtered). `tests/test_open_response_routes.py`
+covers the public question shape (no `expected_points`/`context_excerpt`),
+404s, auth requirement, scoring + `OpenResponseAttempt` persistence, and
+that a blank submission never triggers a model call.
+`frontend/src/components/LessonOpenResponse.test.jsx` covers rendering the
+question and an empty textarea, submitting and displaying score/feedback,
+showing both accurate and missed points, the "Try Again" reset, and a
+load-error state.
+
 Run the Python suite with:
 
 ```bash
@@ -568,13 +677,19 @@ cd frontend && npm test
 
 ## Non-goals for this increment
 
-- No open-response grading.
 - No Lesson Mode *page* -- there is still no route/page in the frontend
-  that fetches a lesson and mounts `LessonFlashcards`/`LessonQuiz`; they
-  exist only as standalone, tested components awaiting that page.
-- No quiz *analytics* beyond a single `QuizAttempt` record per submission
-  (no aggregate best-score tracking wired into `LessonProgress.best_quiz_score`
-  yet, no retake limits).
+  that fetches a lesson and mounts `LessonFlashcards`/`LessonQuiz`/`LessonOpenResponse`;
+  they exist only as standalone, tested components awaiting that page.
+- No quiz/open-response *analytics* beyond one attempt record per
+  submission (no aggregate best-score tracking wired into
+  `LessonProgress.best_quiz_score` yet, no retake limits, no attempt
+  history view).
+- No automated verification that graded feedback text itself references
+  the student's exact wording -- the grading prompt instructs this, and
+  the pre-check's own feedback always quotes the answer directly for
+  degenerate cases, but the LLM grader's compliance for non-degenerate
+  answers is enforced by prompt engineering, not a separate programmatic
+  check.
 - No refresh-token handling beyond what `getIdToken()` does by default, and
   no session/box data denormalized onto `PersonaProfile` or anywhere else.
 - Retrieved `BillSection`s are not yet persisted through `LessonRepository`

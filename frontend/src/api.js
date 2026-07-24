@@ -201,3 +201,19 @@ export const submitQuizAnswers = async (lessonId, answers) => {
   );
   return response.data;
 };
+
+// --- Lesson Mode: open-response question ---
+export const getOpenResponseQuestion = async (lessonId) => {
+  const response = await apiClient.get(`/lesson/${lessonId}/open-response`);
+  return response.data;
+};
+
+export const submitOpenResponseAnswer = async (lessonId, studentAnswer) => {
+  const headers = await getAuthHeaders();
+  const response = await apiClient.post(
+    `/lesson/${lessonId}/open-response/submit`,
+    { student_answer: studentAnswer },
+    { headers }
+  );
+  return response.data;
+};

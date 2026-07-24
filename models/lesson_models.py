@@ -78,6 +78,7 @@ class Lesson(FirestoreModel):
     source_sections: List[str] = Field(default_factory=list)
     vocabulary_card_ids: List[str] = Field(default_factory=list)
     quiz_question_ids: List[str] = Field(default_factory=list)
+    open_response_question_id: Optional[str] = None
 
     created_at: datetime = Field(default_factory=_utcnow)
 
@@ -167,6 +168,46 @@ class QuizAttempt(FirestoreModel):
     score: float = Field(ge=0, le=100)
     answers: List[QuizAnswer] = Field(default_factory=list)
     feedback: str = ""
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
+# ---------------------------------------------------------------------------
+# Open-response question and grading (Increment 6)
+# ---------------------------------------------------------------------------
+
+class OpenResponseQuestion(FirestoreModel):
+    """The single open-ended question generated for a lesson.
+
+    `expected_points` and `context_excerpt` are grading inputs, not shown to
+    the student before they answer -- see routes/lesson_routes.py's public
+    response shape, which omits both.
+    """
+
+    question_id: str
+    lesson_id: str
+    question: str = Field(min_length=1)
+    question_type: Literal[
+        "stakeholder_perspective", "tradeoff", "pro_con_comparison",
+        "implementation_challenge", "impact_prediction",
+    ]
+    expected_points: List[str] = Field(min_length=1)
+    section_ids: List[str] = Field(min_length=1)
+    context_excerpt: str = Field(min_length=1)
+
+
+class OpenResponseAttempt(FirestoreModel):
+    """A user's graded attempt at a lesson's open-response question."""
+
+    attempt_id: str
+    user_id: str
+    lesson_id: str
+    question_id: str
+    student_answer: str
+    score: int = Field(ge=0, le=3)
+    feedback: str = Field(min_length=1)
+    missed_points: List[str] = Field(default_factory=list)
+    accurate_points: List[str] = Field(default_factory=list)
+    section_ids: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_utcnow)
 
 

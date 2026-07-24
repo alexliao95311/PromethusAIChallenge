@@ -8,6 +8,8 @@ from .lesson_models import (
     QuizQuestion,
     QuizAnswer,
     QuizAttempt,
+    OpenResponseQuestion,
+    OpenResponseAttempt,
     PersonaProfile,
     LessonProgress,
 )
@@ -22,6 +24,8 @@ __all__ = [
     "QuizQuestion",
     "QuizAnswer",
     "QuizAttempt",
+    "OpenResponseQuestion",
+    "OpenResponseAttempt",
     "PersonaProfile",
     "LessonProgress",
 ]

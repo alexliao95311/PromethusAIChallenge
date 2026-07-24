@@ -16,6 +16,8 @@ from models.lesson_models import (
     UserCardProgress,
     QuizQuestion,
     QuizAttempt,
+    OpenResponseQuestion,
+    OpenResponseAttempt,
     PersonaProfile,
     LessonProgress,
 )
@@ -29,6 +31,8 @@ COLLECTION_FLASHCARDS = "flashcards"
 COLLECTION_USER_CARD_PROGRESS = "user_card_progress"
 COLLECTION_QUIZ_QUESTIONS = "quiz_questions"
 COLLECTION_QUIZ_ATTEMPTS = "quiz_attempts"
+COLLECTION_OPEN_RESPONSE_QUESTIONS = "open_response_questions"
+COLLECTION_OPEN_RESPONSE_ATTEMPTS = "open_response_attempts"
 COLLECTION_PERSONA_PROFILES = "persona_profiles"
 COLLECTION_LESSON_PROGRESS = "lesson_progress"
 
@@ -138,6 +142,32 @@ class LessonRepository:
         if not doc.exists:
             return None
         return QuizAttempt.from_firestore_dict(doc.to_dict())
+
+    # -- OpenResponseQuestion --------------------------------------------
+    def create_open_response_question(self, question: OpenResponseQuestion) -> str:
+        self.db.collection(COLLECTION_OPEN_RESPONSE_QUESTIONS).document(question.question_id).set(
+            question.to_firestore_dict()
+        )
+        return question.question_id
+
+    def get_open_response_question(self, question_id: str) -> Optional[OpenResponseQuestion]:
+        doc = self.db.collection(COLLECTION_OPEN_RESPONSE_QUESTIONS).document(question_id).get()
+        if not doc.exists:
+            return None
+        return OpenResponseQuestion.from_firestore_dict(doc.to_dict())
+
+    # -- OpenResponseAttempt ----------------------------------------------
+    def create_open_response_attempt(self, attempt: OpenResponseAttempt) -> str:
+        self.db.collection(COLLECTION_OPEN_RESPONSE_ATTEMPTS).document(attempt.attempt_id).set(
+            attempt.to_firestore_dict()
+        )
+        return attempt.attempt_id
+
+    def get_open_response_attempt(self, attempt_id: str) -> Optional[OpenResponseAttempt]:
+        doc = self.db.collection(COLLECTION_OPEN_RESPONSE_ATTEMPTS).document(attempt_id).get()
+        if not doc.exists:
+            return None
+        return OpenResponseAttempt.from_firestore_dict(doc.to_dict())
 
     # -- PersonaProfile ------------------------------------------------
     def upsert_persona_profile(self, profile: PersonaProfile) -> str:

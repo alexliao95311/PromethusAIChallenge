@@ -3,7 +3,8 @@
 Increment 1 added bill-section retrieval; Increment 2 added grounded lesson
 generation; Increment 3 added optional vocabulary generation; Increment 4
 added the adaptive (Leitner-box) flashcard review endpoints; Increment 5
-adds grounded multiple-choice quiz generation -- see
+added grounded multiple-choice quiz generation; Increment 6 adds the
+open-response question and its grading -- see
 docs/LESSON_MODE_ARCHITECTURE.md.
 """
 
@@ -14,7 +15,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from models.lesson_models import Flashcard, Lesson, QuizAnswer, QuizAttempt
+from models.lesson_models import Flashcard, Lesson, OpenResponseAttempt, QuizAnswer, QuizAttempt
 from services.auth import get_current_user_id
 from services.flashcard_review import (
     CardNotInLessonError,
@@ -27,6 +28,11 @@ from services.lesson_generation import (
     LessonGenerationError,
     LessonGenerationService,
 )
+from services.open_response_generation import (
+    OpenResponseGenerationError,
+    OpenResponseGenerationService,
+)
+from services.open_response_grading import OpenResponseGradingError, OpenResponseGradingService
 from services.quiz_generation import QuizGenerationError, QuizGenerationService
 from services.rag.retrieval_service import BillNotCachedError, BillRagService, RetrievedSection
 from services.vocabulary_generation import VocabularyGenerationError, VocabularyGenerationService
@@ -42,6 +48,10 @@ _lesson_generation_service = LessonGenerationService(rag_service=_rag_service)
 _vocabulary_generation_service = VocabularyGenerationService(rag_service=_rag_service)
 _flashcard_review_service = FlashcardReviewService(repository=_lesson_generation_service.repository)
 _quiz_generation_service = QuizGenerationService(repository=_lesson_generation_service.repository)
+_open_response_generation_service = OpenResponseGenerationService(
+    repository=_lesson_generation_service.repository
+)
+_open_response_grading_service = OpenResponseGradingService()
 
 
 class RetrieveSectionsRequest(BaseModel):
@@ -89,6 +99,7 @@ class GenerateLessonRequest(BaseModel):
     model: str = DEFAULT_LESSON_MODEL
     include_vocabulary: bool = False
     include_quiz: bool = False
+    include_open_response: bool = False
 
 
 class QuizQuestionPublic(BaseModel):
@@ -103,9 +114,20 @@ class QuizQuestionPublic(BaseModel):
     question_type: str
 
 
+class OpenResponseQuestionPublic(BaseModel):
+    """An open-response question without `expected_points`/`context_excerpt`
+    -- the shape shown to a student before they answer."""
+
+    question_id: str
+    question: str
+    question_type: str
+    section_ids: List[str]
+
+
 class GenerateLessonResponse(Lesson):
     vocabulary: Optional[List[Flashcard]] = None
     quiz: Optional[List[QuizQuestionPublic]] = None
+    open_response_question: Optional[OpenResponseQuestionPublic] = None
 
 
 def _merge_ids(existing_ids: List[str], new_ids: List[str]) -> List[str]:
@@ -115,8 +137,9 @@ def _merge_ids(existing_ids: List[str], new_ids: List[str]) -> List[str]:
 @router.post("/generate", response_model=GenerateLessonResponse)
 async def generate_lesson(request: GenerateLessonRequest):
     logger.info(
-        "POST /lesson/generate bill_id=%s model=%s include_vocabulary=%s include_quiz=%s",
+        "POST /lesson/generate bill_id=%s model=%s include_vocabulary=%s include_quiz=%s include_open_response=%s",
         request.bill_id, request.model, request.include_vocabulary, request.include_quiz,
+        request.include_open_response,
     )
     try:
         lesson = await _lesson_generation_service.generate_lesson(
@@ -149,7 +172,19 @@ async def generate_lesson(request: GenerateLessonRequest):
                 QuizQuestionPublic(**q.model_dump(exclude={"lesson_id", "correct_answer_index", "explanation"}))
                 for q in quiz_questions
             ]
-    except (LessonGenerationError, VocabularyGenerationError, QuizGenerationError) as e:
+
+        open_response_question = None
+        if request.include_open_response:
+            or_question = await _open_response_generation_service.generate_question(
+                lesson_id=lesson.lesson_id, model=request.model
+            )
+            if lesson.open_response_question_id != or_question.question_id:
+                lesson = lesson.model_copy(update={"open_response_question_id": or_question.question_id})
+                _lesson_generation_service.repository.create_lesson(lesson)
+            open_response_question = OpenResponseQuestionPublic(
+                **or_question.model_dump(exclude={"lesson_id", "expected_points", "context_excerpt"})
+            )
+    except (LessonGenerationError, VocabularyGenerationError, QuizGenerationError, OpenResponseGenerationError) as e:
         raise HTTPException(status_code=502, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -157,7 +192,9 @@ async def generate_lesson(request: GenerateLessonRequest):
         logger.error(f"Error in /lesson/generate: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error generating lesson")
 
-    return GenerateLessonResponse(**lesson.model_dump(), vocabulary=vocabulary, quiz=quiz)
+    return GenerateLessonResponse(
+        **lesson.model_dump(), vocabulary=vocabulary, quiz=quiz, open_response_question=open_response_question
+    )
 
 
 class StartSessionResponse(BaseModel):
@@ -338,3 +375,92 @@ async def submit_quiz(
     _lesson_generation_service.repository.create_quiz_attempt(attempt)
 
     return SubmitQuizResponse(attempt_id=attempt.attempt_id, score=score, results=results)
+
+
+@router.get("/{lesson_id}/open-response", response_model=OpenResponseQuestionPublic)
+async def get_open_response_question(lesson_id: str):
+    logger.info("GET /lesson/%s/open-response", lesson_id)
+    lesson = _get_lesson_or_404(lesson_id)
+
+    if not lesson.open_response_question_id:
+        raise HTTPException(
+            status_code=404, detail=f"No open-response question generated yet for lesson_id={lesson_id!r}"
+        )
+    question = _lesson_generation_service.repository.get_open_response_question(
+        lesson.open_response_question_id
+    )
+    if question is None:
+        raise HTTPException(
+            status_code=404, detail=f"No open-response question generated yet for lesson_id={lesson_id!r}"
+        )
+
+    return OpenResponseQuestionPublic(
+        **question.model_dump(exclude={"lesson_id", "expected_points", "context_excerpt"})
+    )
+
+
+class SubmitOpenResponseRequest(BaseModel):
+    student_answer: str = Field(..., min_length=0)
+
+
+class SubmitOpenResponseResponse(BaseModel):
+    attempt_id: str
+    score: int
+    feedback: str
+    missed_points: List[str]
+    accurate_points: List[str]
+    section_ids: List[str]
+
+
+@router.post("/{lesson_id}/open-response/submit", response_model=SubmitOpenResponseResponse)
+async def submit_open_response(
+    lesson_id: str, request: SubmitOpenResponseRequest, user_id: str = Depends(get_current_user_id)
+):
+    logger.info(
+        "POST /lesson/%s/open-response/submit user_id=%s answer_length=%d",
+        lesson_id, user_id, len(request.student_answer),
+    )
+    lesson = _get_lesson_or_404(lesson_id)
+
+    if not lesson.open_response_question_id:
+        raise HTTPException(
+            status_code=404, detail=f"No open-response question generated yet for lesson_id={lesson_id!r}"
+        )
+    question = _lesson_generation_service.repository.get_open_response_question(
+        lesson.open_response_question_id
+    )
+    if question is None:
+        raise HTTPException(
+            status_code=404, detail=f"No open-response question generated yet for lesson_id={lesson_id!r}"
+        )
+
+    try:
+        grade = await _open_response_grading_service.grade_answer(question, request.student_answer)
+    except OpenResponseGradingError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in /lesson/{lesson_id}/open-response/submit: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error grading answer")
+
+    attempt = OpenResponseAttempt(
+        attempt_id=str(uuid.uuid4()),
+        user_id=user_id,
+        lesson_id=lesson_id,
+        question_id=question.question_id,
+        student_answer=request.student_answer,
+        score=grade.score,
+        feedback=grade.feedback,
+        missed_points=grade.missed_points,
+        accurate_points=grade.accurate_points,
+        section_ids=grade.section_ids,
+    )
+    _lesson_generation_service.repository.create_open_response_attempt(attempt)
+
+    return SubmitOpenResponseResponse(
+        attempt_id=attempt.attempt_id,
+        score=grade.score,
+        feedback=grade.feedback,
+        missed_points=grade.missed_points,
+        accurate_points=grade.accurate_points,
+        section_ids=grade.section_ids,
+    )
