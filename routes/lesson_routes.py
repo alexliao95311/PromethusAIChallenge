@@ -33,6 +33,7 @@ from services.open_response_generation import (
     OpenResponseGenerationService,
 )
 from services.open_response_grading import OpenResponseGradingError, OpenResponseGradingService
+from services.persona_service import PersonaService, PersonaValidationError
 from services.quiz_generation import QuizGenerationError, QuizGenerationService
 from services.rag.retrieval_service import BillNotCachedError, BillRagService, RetrievedSection
 from services.vocabulary_generation import VocabularyGenerationError, VocabularyGenerationService
@@ -52,6 +53,7 @@ _open_response_generation_service = OpenResponseGenerationService(
     repository=_lesson_generation_service.repository
 )
 _open_response_grading_service = OpenResponseGradingService()
+_persona_service = PersonaService(repository=_lesson_generation_service.repository)
 
 
 class RetrieveSectionsRequest(BaseModel):
@@ -464,3 +466,113 @@ async def submit_open_response(
         accurate_points=grade.accurate_points,
         section_ids=grade.section_ids,
     )
+
+
+# ---------------------------------------------------------------------------
+# Student persona builder (Increment 7)
+#
+# The persona is optional, may be fictional, and collects only broad
+# attributes. Reading/saving/deleting a persona is per-user, so those routes
+# require an authenticated caller and derive the uid from the verified token
+# (never from the request body). The `occupation` field is an
+# "occupation or role" -- a current job, an intended future occupation, or a
+# broad category. No impact narrative is generated here (that is Increment 8).
+# ---------------------------------------------------------------------------
+
+class PersonaFieldOptionsResponse(BaseModel):
+    occupation_suggestions: List[str]
+    occupation_allows_custom: bool
+    occupation_max_length: int
+    states: List[dict]
+    age_ranges: List[str]
+    income_brackets: List[str]
+    all_fields_optional: bool
+    persona_may_be_fictional: bool
+    not_collected: List[str]
+
+
+class SavePersonaRequest(BaseModel):
+    """All fields optional so a student can save just one, or leave any blank
+    (blank/omitted == skipped). An empty string is treated as "skip"."""
+
+    occupation: Optional[str] = Field(default=None, description="Occupation or intended role")
+    state: Optional[str] = None
+    age_range: Optional[str] = None
+    income_bracket: Optional[str] = None
+
+
+class PersonaResponse(BaseModel):
+    has_persona: bool
+    occupation: Optional[str] = None
+    state: Optional[str] = None
+    age_range: Optional[str] = None
+    income_bracket: Optional[str] = None
+    # Representation the (future) personal-impact generator consumes.
+    impact_representation: Optional[dict] = None
+
+
+def _persona_response(profile) -> PersonaResponse:
+    if profile is None:
+        return PersonaResponse(has_persona=False)
+    return PersonaResponse(
+        has_persona=True,
+        occupation=profile.occupation,
+        state=profile.state,
+        age_range=profile.age_range,
+        income_bracket=profile.income_bracket,
+        impact_representation=profile.to_impact_representation(),
+    )
+
+
+@router.get("/persona/options", response_model=PersonaFieldOptionsResponse)
+async def get_persona_options():
+    """Public: the choice sets + privacy disclaimer the builder UI needs.
+
+    Contains no user data, so it needs no authentication."""
+    logger.info("GET /lesson/persona/options")
+    return PersonaFieldOptionsResponse(**_persona_service.field_options())
+
+
+@router.get("/persona", response_model=PersonaResponse)
+async def get_persona(user_id: str = Depends(get_current_user_id)):
+    logger.info("GET /lesson/persona user_id=%s", user_id)
+    try:
+        profile = _persona_service.get_persona(user_id)
+    except Exception as e:
+        logger.error(f"Error in GET /lesson/persona: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error loading persona")
+    return _persona_response(profile)
+
+
+@router.put("/persona", response_model=PersonaResponse)
+async def save_persona(request: SavePersonaRequest, user_id: str = Depends(get_current_user_id)):
+    """Create or edit the authenticated user's persona (upsert by uid).
+
+    Saving happens only on this explicit, authenticated call -- there is no
+    implicit persistence anywhere else."""
+    logger.info("PUT /lesson/persona user_id=%s", user_id)
+    try:
+        profile = _persona_service.save_persona(
+            user_id,
+            occupation=request.occupation,
+            state=request.state,
+            age_range=request.age_range,
+            income_bracket=request.income_bracket,
+        )
+    except PersonaValidationError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in PUT /lesson/persona: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error saving persona")
+    return _persona_response(profile)
+
+
+@router.delete("/persona")
+async def delete_persona(user_id: str = Depends(get_current_user_id)):
+    logger.info("DELETE /lesson/persona user_id=%s", user_id)
+    try:
+        deleted = _persona_service.delete_persona(user_id)
+    except Exception as e:
+        logger.error(f"Error in DELETE /lesson/persona: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error deleting persona")
+    return {"deleted": deleted}
