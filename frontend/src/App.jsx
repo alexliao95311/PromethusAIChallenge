@@ -18,6 +18,7 @@ import SimulatedDebateHistory from "./components/SimulatedDebateHistory";
 import voicePreferenceService from "./services/voicePreferenceService";
 import languagePreferenceService from "./services/languagePreferenceService";
 import DebateTrainer from "./components/debatetrainer";
+import LessonPersona from "./components/LessonPersona";
 
 // Component to handle scroll reset on route changes
 function ScrollToTop() {
@@ -118,6 +119,9 @@ function App() {
         <Route path="/shared/:shareId" element={<PublicTranscriptView />} />
         <Route path="/about" element={<AboutUs />} />
         <Route path="/speech-test" element={<SpeechTest />} />
+        {/* Public: viewing/filling out a persona needs no auth -- only
+            saving/editing/deleting it does (gated inside PersonaBuilder). */}
+        <Route path="/lesson/persona" element={<LessonPersona user={user} />} />
         
         {!user ? (
           <Route path="*" element={<Login onLogin={setUser} />} />

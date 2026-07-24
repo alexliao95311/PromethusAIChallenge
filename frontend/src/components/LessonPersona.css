@@ -1,0 +1,22 @@
+.lesson-persona-page {
+  min-height: 100vh;
+  background: #0f172a;
+  padding: 2rem 1rem 4rem;
+}
+
+.lesson-persona-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 640px;
+  margin: 0 auto 1rem;
+  color: #93c5fd;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0 1.5rem;
+}
+
+.lesson-persona-back-link:hover {
+  text-decoration: underline;
+}
