@@ -1,11 +1,10 @@
 # Lesson Mode Architecture
 
-Status: **Increment 4 — Flashcard UI and Leitner System.** Adds adaptive,
-per-user flashcard review scheduling (3-box Leitner system, session-based
-due dates) plus a React review component. This is also the first
-server-side-authenticated feature in the codebase -- see "Auth" below. Quiz
-generation still does not exist; existing debate/bill functionality is
-untouched.
+Status: **Increment 5 — Multiple-Choice Quiz Generation.** Adds grounded
+quiz generation (5-8 questions per lesson, embedding-first distractor
+pipeline with an LLM fallback), quiz-taking/scoring endpoints, and a React
+quiz page. Open-response grading and flashcard/quiz analytics still do not
+exist; existing debate/bill functionality is untouched.
 
 ## Why
 
@@ -159,9 +158,39 @@ Increment 4 adds:
   (`frontend/src/components/LessonFlashcards.test.jsx`), wired via
   `vite.config.js`'s new `test` block and `npm test`.
 
-Future increments are expected to add: quiz generation, and a full Lesson
-Mode page/route that actually mounts `LessonFlashcards` (no such page
-exists yet -- see Non-goals).
+Increment 5 adds:
+
+- `services/quiz_generation.py` — `QuizGenerationService.generate_quiz(lesson_id,
+  model=...)`, producing 5-8 `QuizQuestion`s from an *already-generated*
+  lesson's own grounded content (`Lesson.major_provisions`/`stakeholders`
+  and its `Flashcard` vocabulary) -- quizzes take `lesson_id`, not raw bill
+  text, since the correct answers are pulled directly from data Increments
+  2/3 already validated against real sections, never re-invented by a model
+  call. A single phrasing-only model call writes a natural question stem +
+  explanation + difficulty per fact; the *distractor pipeline* (embedding
+  similarity first, one constrained LLM fallback call second, both
+  rejecting near-duplicates-of-correct and case-insensitive dupes) is the
+  genuinely new logic in this increment -- see "Quiz generation" below.
+- `Lesson.quiz_question_ids` (new field), persisted by
+  `QuizGenerationService.generate_quiz` itself (mirroring how vocabulary's
+  card ids get merged onto the lesson), so `GET /lesson/{id}/quiz` can list
+  a lesson's questions without a Firestore compound query.
+- `GenerateLessonRequest.include_quiz` (default `False`) on `POST
+  /lesson/generate`, alongside two new endpoints: `GET /lesson/{lesson_id}/quiz`
+  (public quiz-taking shape -- no `correct_answer_index`/`explanation`) and
+  `POST /lesson/{lesson_id}/quiz/submit` (requires `Depends(get_current_user_id)`;
+  scores the submission, saves a `QuizAttempt`, and returns immediate
+  per-question explanations).
+- `frontend/src/components/LessonQuiz.jsx` (+ `.css`) — the quiz-taking UI:
+  answer-choice selection, a submit button gated on every question being
+  answered, and an immediate per-question correct/incorrect + explanation
+  view plus an overall score banner once submitted.
+- `tests/test_quiz_generation.py` (backend) and
+  `frontend/src/components/LessonQuiz.test.jsx` (frontend) -- see Testing.
+
+Future increments are expected to add: open-response grading, and a full
+Lesson Mode page/route that actually mounts `LessonFlashcards`/`LessonQuiz`
+(no such page exists yet -- see Non-goals).
 
 ## Data models (`models/lesson_models.py`)
 
@@ -178,11 +207,12 @@ All lesson-mode models inherit from a small `FirestoreModel` base
 |---|---|---|
 | `BillSection` | Unit of retrieval for the RAG pipeline | `section_id`, `bill_id`, `heading`, `text`, `order`, `embedding` |
 | `GroundedClaim` | A claim tied to the section_id(s) that support it | `claim`, `section_ids` (non-empty) |
-| `Lesson` | Generated, grounded lesson for a bill (Increment 2) | `lesson_id`, `bill_id`, `prompt_version`, `bill_text_hash`, `lesson_title`, `plain_language_summary`, `learning_objectives`, `major_provisions`, `stakeholders`, `pro_arguments`, `con_arguments` (all `List[GroundedClaim]`), `source_sections`, `vocabulary_card_ids` (Increment 4), `created_at` |
+| `Lesson` | Generated, grounded lesson for a bill (Increment 2) | `lesson_id`, `bill_id`, `prompt_version`, `bill_text_hash`, `lesson_title`, `plain_language_summary`, `learning_objectives`, `major_provisions`, `stakeholders`, `pro_arguments`, `con_arguments` (all `List[GroundedClaim]`), `source_sections`, `vocabulary_card_ids` (Increment 4), `quiz_question_ids` (Increment 5), `created_at` |
 | `Flashcard` | Bill-specific vocabulary card, grounded in one section (Increment 3) | `card_id`, `lesson_id`, `term`, `simple_definition`, `bill_context`, `example`, `section_id`, `difficulty` (`beginner`\|`intermediate`\|`advanced`) |
 | `LeitnerBox` | `IntEnum` (1–3, Increment 4) documenting the Leitner box levels | — |
 | `UserCardProgress` | One user's Leitner progress on one flashcard (Increment 4 shape) | `user_id`, `card_id`, `leitner_box` (1-3), `correct_count`, `incorrect_count`, `last_reviewed_session`, `next_due_session` |
-| `QuizAnswer` | One answer within a quiz attempt | `question_id`, `response`, `is_correct` |
+| `QuizQuestion` | A grounded multiple-choice question (Increment 5) | `question_id`, `lesson_id`, `question`, `answer_choices` (4, order randomized), `correct_answer_index`, `explanation`, `section_ids`, `difficulty`, `question_type` (`vocabulary`\|`stakeholder_impact`\|`provision`\|`implementation`) |
+| `QuizAnswer` | One answer within a quiz attempt | `question_id`, `response` (the selected index, as a string), `is_correct` |
 | `QuizAttempt` | A user's full quiz attempt for a lesson | `attempt_id`, `user_id`, `lesson_id`, `score`, `answers`, `feedback`, `created_at` |
 | `PersonaProfile` | Student-built persona for personalization | `user_id`, `occupation`, `state`, `age_range`, `income_bracket` |
 | `LessonProgress` | Overall per-user progress on a lesson | `user_id`, `lesson_id`, `vocab_mastered`, `vocab_total`, `quiz_attempts`, `best_quiz_score`, `completed`, `current_session` (Increment 4: Leitner session counter), `updated_at` |
@@ -419,6 +449,53 @@ reveal, reveal shows definition/context/example, correct/incorrect answer
 submission, immediate mastery-bar/due-count updates, the completion state,
 starting a new session, the "Needs review" label, and a load-error state.
 
+## Quiz generation (`services/quiz_generation.py`, Increment 5)
+
+```
+Lesson + its Flashcards -> build_fact_pool (vocabulary/stakeholder/
+  provision/implementation facts, each already grounded to a section_id
+  from Increment 2/3) -> select_target_facts (round-robin up to 8) ->
+  one phrasing-only model call (question stem + explanation + difficulty
+  per fact -- never invents the correct answer) -> per question:
+  distractor pipeline -> shuffle_choices -> QuizQuestion, persisted +
+  merged onto Lesson.quiz_question_ids
+```
+
+- **Facts are never model-generated.** `build_fact_pool` pulls correct
+  answers straight from `Lesson.stakeholders`/`major_provisions`
+  (`GroundedClaim`s) and each `Flashcard.simple_definition` -- all already
+  validated against real bill sections by Increments 2/3. `_classify_provision_type`
+  splits `major_provisions` into `"provision"` vs `"implementation"` by a
+  keyword heuristic (`implement`, `regulation`, `shall issue`, `enactment`,
+  `agency`, ...) rather than a separate retrieval/LLM call. This is why a
+  quiz question's `section_ids` need no additional grounding check here --
+  it inherits grounding from where the fact came from.
+- **Distractor pipeline** (the genuinely new logic): `select_embedding_distractors`
+  ranks every *other* fact in the same lesson by cosine similarity
+  (`services.rag.embeddings.get_embedding_provider`) to the correct answer
+  and keeps the most similar ones below `MAX_DISTRACTOR_SIMILARITY` (0.92)
+  -- similar enough to be plausible, not so similar it could reasonably be
+  considered correct too, deduped case-insensitively. If fewer than
+  `NUM_DISTRACTORS` (3) survive, `_generate_fallback_distractors` makes one
+  constrained model call (`DISTRACTOR_FALLBACK_SYSTEM_PROMPT`, the prompt
+  given in the spec verbatim) for the remainder, validated the same way. If
+  still short, the question is dropped entirely rather than shipped with
+  fewer than 4 choices.
+- **Randomization**: `shuffle_choices` is a standalone, directly-testable
+  function -- `tests/test_quiz_generation.py` calls it dozens of times and
+  asserts the correct answer doesn't always land in the same slot.
+- **Invalid model output**: `ground_phrasing` drops any `fact_index` that's
+  out of range or a duplicate (silently -- other valid questions still
+  proceed) but raises `QuizGenerationError` if the phrasing response is
+  unparseable JSON at all, matching "invalid model output is regenerated or
+  rejected."
+- Endpoints: `GET /lesson/{lesson_id}/quiz` returns the public,
+  answer-hidden shape; `POST /lesson/{lesson_id}/quiz/submit` (auth
+  required) grades against the stored `correct_answer_index`, saves a
+  `QuizAttempt`, and returns per-question `correct`/`correct_answer_index`/`explanation`
+  immediately in the same response -- no separate "reveal explanation"
+  round-trip.
+
 ## Testing
 
 `tests/fake_firestore.py` implements the minimal subset of the
@@ -458,6 +535,25 @@ progress is fully independent, the `get_current_user_id` auth dependency
 three review endpoints mounted standalone with `app.dependency_overrides`
 substituting a fixed test uid for the real Firebase token verification.
 
+`tests/test_quiz_generation.py` covers: fact-pool construction and
+implementation-vs-provision classification, `select_target_facts`
+round-robin diversity, `ground_phrasing` (valid input, out-of-range/duplicate
+`fact_index` dropped, malformed JSON raises), the embedding distractor
+selector (rejects an exact duplicate of the correct answer, case-insensitive
+dedup, empty pool), `shuffle_choices` (all choices present, correct index
+varies across repeated calls), end-to-end `generate_quiz` against a scripted
+LLM (5-8 grounded questions with no duplicate choices, persistence, unknown
+lesson / no-content errors, the distractor-fallback path when the embedding
+pool is too small, and dropping a question when even the fallback can't
+produce enough distractors), and the three quiz endpoints (public shape
+hides the answer, 404s for a missing lesson/ungenerated quiz, auth required
+to submit, scoring + `QuizAttempt` persistence, rejecting a `question_id`
+that doesn't belong to the lesson). `frontend/src/components/LessonQuiz.test.jsx`
+covers rendering all questions/choices, submit disabled until every question
+is answered, submitting and showing the score, immediate per-question
+explanations after submission, locking answers post-submission, and a
+load-error state.
+
 Run the Python suite with:
 
 ```bash
@@ -472,10 +568,13 @@ cd frontend && npm test
 
 ## Non-goals for this increment
 
-- No quiz generation.
+- No open-response grading.
 - No Lesson Mode *page* -- there is still no route/page in the frontend
-  that fetches a lesson and mounts `LessonFlashcards`; it exists only as a
-  standalone, tested component awaiting that page.
+  that fetches a lesson and mounts `LessonFlashcards`/`LessonQuiz`; they
+  exist only as standalone, tested components awaiting that page.
+- No quiz *analytics* beyond a single `QuizAttempt` record per submission
+  (no aggregate best-score tracking wired into `LessonProgress.best_quiz_score`
+  yet, no retake limits).
 - No refresh-token handling beyond what `getIdToken()` does by default, and
   no session/box data denormalized onto `PersonaProfile` or anywhere else.
 - Retrieved `BillSection`s are not yet persisted through `LessonRepository`

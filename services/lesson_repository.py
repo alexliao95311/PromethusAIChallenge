@@ -14,6 +14,7 @@ from models.lesson_models import (
     Lesson,
     Flashcard,
     UserCardProgress,
+    QuizQuestion,
     QuizAttempt,
     PersonaProfile,
     LessonProgress,
@@ -26,6 +27,7 @@ COLLECTION_BILL_SECTIONS = "bill_sections"
 COLLECTION_LESSONS = "lessons"
 COLLECTION_FLASHCARDS = "flashcards"
 COLLECTION_USER_CARD_PROGRESS = "user_card_progress"
+COLLECTION_QUIZ_QUESTIONS = "quiz_questions"
 COLLECTION_QUIZ_ATTEMPTS = "quiz_attempts"
 COLLECTION_PERSONA_PROFILES = "persona_profiles"
 COLLECTION_LESSON_PROGRESS = "lesson_progress"
@@ -110,6 +112,19 @@ class LessonRepository:
         if not doc.exists:
             return None
         return UserCardProgress.from_firestore_dict(doc.to_dict())
+
+    # -- QuizQuestion --------------------------------------------------
+    def create_quiz_question(self, question: QuizQuestion) -> str:
+        self.db.collection(COLLECTION_QUIZ_QUESTIONS).document(question.question_id).set(
+            question.to_firestore_dict()
+        )
+        return question.question_id
+
+    def get_quiz_question(self, question_id: str) -> Optional[QuizQuestion]:
+        doc = self.db.collection(COLLECTION_QUIZ_QUESTIONS).document(question_id).get()
+        if not doc.exists:
+            return None
+        return QuizQuestion.from_firestore_dict(doc.to_dict())
 
     # -- QuizAttempt -------------------------------------------------------
     def create_quiz_attempt(self, attempt: QuizAttempt) -> str:

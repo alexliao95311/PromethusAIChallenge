@@ -77,6 +77,7 @@ class Lesson(FirestoreModel):
     con_arguments: List[GroundedClaim] = Field(default_factory=list)
     source_sections: List[str] = Field(default_factory=list)
     vocabulary_card_ids: List[str] = Field(default_factory=list)
+    quiz_question_ids: List[str] = Field(default_factory=list)
 
     created_at: datetime = Field(default_factory=_utcnow)
 
@@ -131,6 +132,23 @@ class UserCardProgress(FirestoreModel):
 # ---------------------------------------------------------------------------
 # Quizzes
 # ---------------------------------------------------------------------------
+
+class QuizQuestion(FirestoreModel):
+    """A single grounded multiple-choice question generated for a lesson
+    (Increment 5). `answer_choices` always has exactly one correct entry,
+    at `correct_answer_index` -- the correct answer's own position is
+    randomized per question at generation time, not fixed to index 0."""
+
+    question_id: str
+    lesson_id: str
+    question: str = Field(min_length=1)
+    answer_choices: List[str] = Field(min_length=2)
+    correct_answer_index: int = Field(ge=0)
+    explanation: str = Field(min_length=1)
+    section_ids: List[str] = Field(min_length=1)
+    difficulty: Literal["beginner", "intermediate", "advanced"] = "intermediate"
+    question_type: Literal["vocabulary", "stakeholder_impact", "provision", "implementation"]
+
 
 class QuizAnswer(FirestoreModel):
     """A single answer within a quiz attempt."""

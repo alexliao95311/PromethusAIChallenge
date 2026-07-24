@@ -2,17 +2,19 @@
 
 Increment 1 added bill-section retrieval; Increment 2 added grounded lesson
 generation; Increment 3 added optional vocabulary generation; Increment 4
-adds the adaptive (Leitner-box) flashcard review endpoints -- see
+added the adaptive (Leitner-box) flashcard review endpoints; Increment 5
+adds grounded multiple-choice quiz generation -- see
 docs/LESSON_MODE_ARCHITECTURE.md.
 """
 
 import logging
+import uuid
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from models.lesson_models import Flashcard, Lesson
+from models.lesson_models import Flashcard, Lesson, QuizAnswer, QuizAttempt
 from services.auth import get_current_user_id
 from services.flashcard_review import (
     CardNotInLessonError,
@@ -25,6 +27,7 @@ from services.lesson_generation import (
     LessonGenerationError,
     LessonGenerationService,
 )
+from services.quiz_generation import QuizGenerationError, QuizGenerationService
 from services.rag.retrieval_service import BillNotCachedError, BillRagService, RetrievedSection
 from services.vocabulary_generation import VocabularyGenerationError, VocabularyGenerationService
 
@@ -38,6 +41,7 @@ _rag_service = BillRagService()
 _lesson_generation_service = LessonGenerationService(rag_service=_rag_service)
 _vocabulary_generation_service = VocabularyGenerationService(rag_service=_rag_service)
 _flashcard_review_service = FlashcardReviewService(repository=_lesson_generation_service.repository)
+_quiz_generation_service = QuizGenerationService(repository=_lesson_generation_service.repository)
 
 
 class RetrieveSectionsRequest(BaseModel):
@@ -84,17 +88,35 @@ class GenerateLessonRequest(BaseModel):
     bill_text: str = Field(..., min_length=1)
     model: str = DEFAULT_LESSON_MODEL
     include_vocabulary: bool = False
+    include_quiz: bool = False
+
+
+class QuizQuestionPublic(BaseModel):
+    """A quiz question without its correct_answer_index/explanation -- the
+    shape shown to a student taking the quiz, before they submit answers."""
+
+    question_id: str
+    question: str
+    answer_choices: List[str]
+    section_ids: List[str]
+    difficulty: str
+    question_type: str
 
 
 class GenerateLessonResponse(Lesson):
     vocabulary: Optional[List[Flashcard]] = None
+    quiz: Optional[List[QuizQuestionPublic]] = None
+
+
+def _merge_ids(existing_ids: List[str], new_ids: List[str]) -> List[str]:
+    return existing_ids + [i for i in new_ids if i not in existing_ids]
 
 
 @router.post("/generate", response_model=GenerateLessonResponse)
 async def generate_lesson(request: GenerateLessonRequest):
     logger.info(
-        "POST /lesson/generate bill_id=%s model=%s include_vocabulary=%s",
-        request.bill_id, request.model, request.include_vocabulary,
+        "POST /lesson/generate bill_id=%s model=%s include_vocabulary=%s include_quiz=%s",
+        request.bill_id, request.model, request.include_vocabulary, request.include_quiz,
     )
     try:
         lesson = await _lesson_generation_service.generate_lesson(
@@ -109,14 +131,25 @@ async def generate_lesson(request: GenerateLessonRequest):
                 bill_text=request.bill_text,
                 model=request.model,
             )
-            new_ids = [c.card_id for c in vocabulary]
-            merged_ids = lesson.vocabulary_card_ids + [
-                cid for cid in new_ids if cid not in lesson.vocabulary_card_ids
-            ]
+            merged_ids = _merge_ids(lesson.vocabulary_card_ids, [c.card_id for c in vocabulary])
             if merged_ids != lesson.vocabulary_card_ids:
                 lesson = lesson.model_copy(update={"vocabulary_card_ids": merged_ids})
                 _lesson_generation_service.repository.create_lesson(lesson)
-    except (LessonGenerationError, VocabularyGenerationError) as e:
+
+        quiz = None
+        if request.include_quiz:
+            quiz_questions = await _quiz_generation_service.generate_quiz(
+                lesson_id=lesson.lesson_id, model=request.model
+            )
+            merged_ids = _merge_ids(lesson.quiz_question_ids, [q.question_id for q in quiz_questions])
+            if merged_ids != lesson.quiz_question_ids:
+                lesson = lesson.model_copy(update={"quiz_question_ids": merged_ids})
+                _lesson_generation_service.repository.create_lesson(lesson)
+            quiz = [
+                QuizQuestionPublic(**q.model_dump(exclude={"lesson_id", "correct_answer_index", "explanation"}))
+                for q in quiz_questions
+            ]
+    except (LessonGenerationError, VocabularyGenerationError, QuizGenerationError) as e:
         raise HTTPException(status_code=502, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -124,7 +157,7 @@ async def generate_lesson(request: GenerateLessonRequest):
         logger.error(f"Error in /lesson/generate: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Error generating lesson")
 
-    return GenerateLessonResponse(**lesson.model_dump(), vocabulary=vocabulary)
+    return GenerateLessonResponse(**lesson.model_dump(), vocabulary=vocabulary, quiz=quiz)
 
 
 class StartSessionResponse(BaseModel):
@@ -192,3 +225,116 @@ async def submit_review_answer(
         last_reviewed_session=updated.last_reviewed_session,
         next_due_session=updated.next_due_session,
     )
+
+
+def _get_lesson_or_404(lesson_id: str) -> Lesson:
+    lesson = _lesson_generation_service.repository.get_lesson(lesson_id)
+    if lesson is None:
+        raise HTTPException(status_code=404, detail=f"No lesson found for lesson_id={lesson_id!r}")
+    return lesson
+
+
+@router.get("/{lesson_id}/quiz", response_model=List[QuizQuestionPublic])
+async def get_quiz(lesson_id: str):
+    logger.info("GET /lesson/%s/quiz", lesson_id)
+    lesson = _get_lesson_or_404(lesson_id)
+
+    questions = [
+        q for q in (
+            _lesson_generation_service.repository.get_quiz_question(qid)
+            for qid in lesson.quiz_question_ids
+        ) if q is not None
+    ]
+    if not questions:
+        raise HTTPException(status_code=404, detail=f"No quiz generated yet for lesson_id={lesson_id!r}")
+
+    return [
+        QuizQuestionPublic(**q.model_dump(exclude={"lesson_id", "correct_answer_index", "explanation"}))
+        for q in questions
+    ]
+
+
+class QuizAnswerSubmission(BaseModel):
+    question_id: str = Field(..., min_length=1)
+    selected_index: int = Field(ge=0)
+
+
+class SubmitQuizRequest(BaseModel):
+    answers: List[QuizAnswerSubmission] = Field(min_length=1)
+
+
+class QuestionResult(BaseModel):
+    question_id: str
+    selected_index: int
+    correct: bool
+    correct_answer_index: int
+    explanation: str
+
+
+class SubmitQuizResponse(BaseModel):
+    attempt_id: str
+    score: float
+    results: List[QuestionResult]
+
+
+@router.post("/{lesson_id}/quiz/submit", response_model=SubmitQuizResponse)
+async def submit_quiz(
+    lesson_id: str, request: SubmitQuizRequest, user_id: str = Depends(get_current_user_id)
+):
+    logger.info(
+        "POST /lesson/%s/quiz/submit user_id=%s answers=%d",
+        lesson_id, user_id, len(request.answers),
+    )
+    lesson = _get_lesson_or_404(lesson_id)
+
+    questions_by_id = {
+        qid: q for qid in lesson.quiz_question_ids
+        if (q := _lesson_generation_service.repository.get_quiz_question(qid)) is not None
+    }
+    if not questions_by_id:
+        raise HTTPException(status_code=404, detail=f"No quiz generated yet for lesson_id={lesson_id!r}")
+
+    results: List[QuestionResult] = []
+    quiz_answers: List[QuizAnswer] = []
+    correct_count = 0
+
+    for submitted in request.answers:
+        question = questions_by_id.get(submitted.question_id)
+        if question is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"question_id={submitted.question_id!r} does not belong to lesson_id={lesson_id!r}",
+            )
+
+        is_correct = submitted.selected_index == question.correct_answer_index
+        if is_correct:
+            correct_count += 1
+
+        results.append(
+            QuestionResult(
+                question_id=question.question_id,
+                selected_index=submitted.selected_index,
+                correct=is_correct,
+                correct_answer_index=question.correct_answer_index,
+                explanation=question.explanation,
+            )
+        )
+        quiz_answers.append(
+            QuizAnswer(
+                question_id=question.question_id,
+                response=str(submitted.selected_index),
+                is_correct=is_correct,
+            )
+        )
+
+    score = round(100 * correct_count / len(request.answers), 1)
+    attempt = QuizAttempt(
+        attempt_id=str(uuid.uuid4()),
+        user_id=user_id,
+        lesson_id=lesson_id,
+        score=score,
+        answers=quiz_answers,
+    )
+    _lesson_generation_service.repository.create_quiz_attempt(attempt)
+
+    return SubmitQuizResponse(attempt_id=attempt.attempt_id, score=score, results=results)

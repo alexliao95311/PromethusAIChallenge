@@ -184,3 +184,20 @@ export const submitReviewAnswer = async (lessonId, cardId, correct) => {
   );
   return response.data;
 };
+
+// --- Lesson Mode: multiple-choice quiz ---
+export const getQuizQuestions = async (lessonId) => {
+  const response = await apiClient.get(`/lesson/${lessonId}/quiz`);
+  return response.data;
+};
+
+// answers: [{ question_id, selected_index }]
+export const submitQuizAnswers = async (lessonId, answers) => {
+  const headers = await getAuthHeaders();
+  const response = await apiClient.post(
+    `/lesson/${lessonId}/quiz/submit`,
+    { answers },
+    { headers }
+  );
+  return response.data;
+};
