@@ -1,11 +1,14 @@
 # Lesson Mode Architecture
 
-Status: **Increment 7 — Student Persona Builder.** Adds an optional,
-possibly-fictional persona a student can build before a lesson (occupation
-or role, state, age *range*, income *bracket* — all optional, all broad).
-The persona is saved only on an explicit authenticated call and can be
-edited or deleted; it exposes an `impact_representation` for the (future)
-personal-impact generator, but no impact narrative is generated yet.
+Status: **Increment 8 — Personalized Bill-Impact Narrative.** Generates a
+grounded, persona-specific explanation of how a bill could affect a student,
+separating effects the bill clearly establishes (`direct_impacts`) from
+effects that depend on implementation/behavior (`possible_indirect_impacts`)
+and what stays `uncertain`. Every impact cites validated bill section_ids and
+carries its own confidence; overall confidence is capped when nothing is
+directly established, so the narrative never overstates certainty. Retrieval
+is persona-driven (RAG queries built from the persona's own attributes), so
+different personas on the same bill get meaningfully different explanations.
 Flashcard/quiz analytics still do not exist; existing debate/bill
 functionality is untouched.
 
@@ -245,11 +248,33 @@ Increment 7 adds:
   and `frontend/src/components/PersonaBuilder.test.jsx` (frontend) -- see
   Testing.
 
-Future increments are expected to add: the personal-impact generator that
-consumes `PersonaProfile.to_impact_representation()` (Increment 8), and a
-full Lesson Mode page/route that actually mounts
-`LessonFlashcards`/`LessonQuiz`/`LessonOpenResponse`/`PersonaBuilder` (no
-such page exists yet -- see Non-goals).
+Increment 8 adds:
+
+- `services/persona_impact_generation.py` --
+  `PersonaImpactGenerationService.generate_impact(persona, lesson,
+  bill_text=..., model=...)`, plus `_ground_impact_draft` (parse + validate
+  + drop ungrounded impacts + cap confidence) and `_build_persona_queries`
+  (persona-driven RAG queries). See "Personalized bill-impact narrative"
+  below.
+- `PersonalImpact` and `PersonalImpactNarrative` models, and
+  `LessonRepository.create_personal_impact_narrative` /
+  `get_personal_impact_narrative` over the new `personal_impact_narratives`
+  collection.
+- `POST /lesson/personal-impact` (auth): resolves the persona (inline
+  possibly-fictional override, else the caller's saved persona), generates
+  the grounded narrative, and returns it.
+- `frontend/src/components/LessonPersonalImpact.jsx` (+ `.css`) and the
+  `getPersonalImpact` helper in `frontend/src/api.js`.
+- `tests/test_persona_impact_generation.py`,
+  `tests/test_persona_impact_routes.py` (backend) and
+  `frontend/src/components/LessonPersonalImpact.test.jsx` (frontend) -- see
+  Testing.
+
+Future increments are expected to add: a full Lesson Mode page/route that
+actually mounts `LessonFlashcards`/`LessonQuiz`/`LessonOpenResponse`/
+`LessonPersonalImpact` (only `PersonaBuilder` is mounted so far, at
+`/lesson/persona`; the rest are built + tested but await the lesson page --
+see Non-goals).
 
 ## Data models (`models/lesson_models.py`)
 
@@ -276,6 +301,8 @@ All lesson-mode models inherit from a small `FirestoreModel` base
 | `OpenResponseQuestion` | The lesson's one open-ended question (Increment 6) | `question_id`, `lesson_id`, `question`, `question_type` (`stakeholder_perspective`\|`tradeoff`\|`pro_con_comparison`\|`implementation_challenge`\|`impact_prediction`), `expected_points`, `section_ids`, `context_excerpt` |
 | `OpenResponseAttempt` | A user's graded attempt at that question | `attempt_id`, `user_id`, `lesson_id`, `question_id`, `student_answer`, `score` (0-3), `feedback`, `missed_points`, `accurate_points`, `section_ids`, `created_at` |
 | `PersonaProfile` | Student-built, optional, possibly-fictional persona for personalization (Increment 7) | `user_id`, `occupation` (broad category or free text, ≤80 chars), `state` (two-letter USPS code), `age_range` (one of `AGE_RANGES`), `income_bracket` (one of `INCOME_BRACKETS`) — every field except `user_id` optional; `to_impact_representation()` yields the generator-facing view |
+| `PersonalImpact` | One grounded way a bill could affect a persona (Increment 8) | `impact` (what), `reasoning` (why), `section_ids` (validated, non-empty), `confidence` (`high`\|`medium`\|`low`) |
+| `PersonalImpactNarrative` | A persona-specific, grounded bill-impact explanation (Increment 8) | `impact_id`, `lesson_id`, `bill_id`, `user_id`, `prompt_version`, `persona` (snapshot), `narrative`, `direct_impacts`/`possible_indirect_impacts` (`List[PersonalImpact]`), `uncertainties`, `questions_to_consider`, `confidence`, `section_ids` (validated union), `created_at` |
 | `LessonProgress` | Overall per-user progress on a lesson | `user_id`, `lesson_id`, `vocab_mastered`, `vocab_total`, `quiz_attempts`, `best_quiz_score`, `completed`, `current_session` (Increment 4: Leitner session counter), `updated_at` |
 
 Validation is enforced via Pydantic field constraints (e.g. `BillSection.text`
@@ -654,6 +681,58 @@ DELETE /lesson/persona           (auth) -> delete; { deleted: bool }
   dropdown, a free-text occupation with a `<datalist>` of suggestions and
   a length check, and Save (auth-gated) / Skip / Delete actions. Saving is
   disabled with a sign-in prompt when the user is not authenticated.
+
+## Personalized bill-impact narrative (Increment 8)
+
+```
+persona -> _build_persona_queries (one base query + one per set attribute:
+  occupation / state / income / age) -> BillRagService retrieves the bill
+  sections most relevant to THIS persona -> dedupe by section_id (keep max
+  similarity), cap at MAX_CITABLE_SECTIONS -> these are the only citable ids
+
+persona descriptor + lesson summary + citable sections -> one model call ->
+  _ground_impact_draft: validate JSON, drop any impact whose cited sections
+  are all unknown, trim invalid ids, normalize per-impact confidence, cap
+  OVERALL confidence at "medium" when no direct impact survives ->
+  PersonalImpactNarrative, persisted + cached by lesson_id + persona hash
+```
+
+- **Personalization comes from retrieval, not just phrasing.** The RAG
+  queries are built from the persona's own attributes
+  (`_build_persona_queries`), so a small-business owner and a retiree
+  retrieve different provisions and therefore get different grounded
+  impacts. This is what makes the narratives "meaningfully different" rather
+  than the same summary reworded (see
+  `test_different_personas_same_bill_get_different_impacts`).
+- **Grounding + section-id validation** reuse the lesson-generation
+  discipline: the model may cite only the retrieved section_ids, and
+  `_ground_impact_draft` drops any impact whose citations are all invalid
+  (never storing an uncited impact) and trims partially-invalid ones. The
+  stored `section_ids` is the validated union across all impacts.
+- **Certainty is never overstated.** Each impact carries its own confidence,
+  and direct effects are separated from `possible_indirect_impacts` and
+  `uncertainties`. Crucially, if no *direct* impact survives validation the
+  overall confidence is capped at `medium` -- the narrative cannot claim the
+  bill "definitely" affects the student unless the text established a direct
+  effect. Unknown/oddly-worded confidences normalize to the conservative
+  `low`.
+- **Persona resolution + privacy.** `POST /lesson/personal-impact` (auth
+  required) uses an inline persona override when supplied (so a student can
+  explore a fictional persona without saving), else the caller's saved
+  persona; the `user_id` always comes from the verified token. The persona
+  snapshot stored on the narrative carries `is_fictional: true`, and the
+  prompt instructs the model not to infer any sensitive trait beyond the
+  persona given.
+- **Caching**: `impact_id = {lesson_id}::impact::{IMPACT_PROMPT_VERSION}::{persona_hash[:16]}`,
+  so the same persona on the same bill is idempotent (no second model call)
+  and a changed persona regenerates.
+- **Frontend**: `LessonPersonalImpact.jsx` renders the narrative
+  prominently -- an overall-confidence banner, then direct effects, possible
+  indirect effects, uncertainties, and questions-to-consider, each impact
+  showing its "why", its cited bill section(s), and a per-impact confidence
+  badge. Generation is an explicit button (it's a model call). Like the
+  other `Lesson*` components it is built + tested but not yet mounted in a
+  page (no Lesson Mode page exists -- see Non-goals).
 
 ## Testing
 
