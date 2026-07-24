@@ -217,3 +217,32 @@ export const submitOpenResponseAnswer = async (lessonId, studentAnswer) => {
   );
   return response.data;
 };
+
+// --- Lesson Mode: student persona builder ---
+// The persona is optional and may be fictional. Options are public; reading,
+// saving, and deleting a persona are per-user and require an auth token.
+
+export const getPersonaOptions = async () => {
+  const response = await apiClient.get('/lesson/persona/options');
+  return response.data;
+};
+
+export const getPersona = async () => {
+  const headers = await getAuthHeaders();
+  const response = await apiClient.get('/lesson/persona', { headers });
+  return response.data;
+};
+
+// persona: { occupation, state, age_range, income_bracket } -- any field may
+// be null/omitted (a skipped field).
+export const savePersona = async (persona) => {
+  const headers = await getAuthHeaders();
+  const response = await apiClient.put('/lesson/persona', persona, { headers });
+  return response.data;
+};
+
+export const deletePersona = async () => {
+  const headers = await getAuthHeaders();
+  const response = await apiClient.delete('/lesson/persona', { headers });
+  return response.data;
+};

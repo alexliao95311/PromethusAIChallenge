@@ -1,0 +1,151 @@
+.persona-builder {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  color: #f8fafc;
+  font-family: inherit;
+}
+
+.persona-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+}
+
+.persona-intro {
+  color: #cbd5e1;
+  font-size: 0.95rem;
+  margin: 0 0 0.75rem;
+}
+
+.persona-privacy-note {
+  background: rgba(74, 144, 226, 0.1);
+  border: 1px solid rgba(74, 144, 226, 0.35);
+  color: #93c5fd;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  margin: 0 0 1.25rem;
+}
+
+.persona-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.persona-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.persona-field label {
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: #e2e8f0;
+}
+
+.persona-field input,
+.persona-field select {
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(71, 85, 105, 0.7);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+  color: #f8fafc;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.persona-field input:focus,
+.persona-field select:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.3);
+}
+
+.persona-help {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.persona-field-error {
+  font-size: 0.8rem;
+  color: #fca5a5;
+}
+
+.persona-error,
+.persona-error-inline {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+}
+
+.persona-status {
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  color: #86efac;
+  padding: 0.6rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+.persona-signin-note {
+  font-size: 0.85rem;
+  color: #94a3b8;
+  margin: 0;
+}
+
+.persona-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.persona-btn {
+  border: none;
+  border-radius: 8px;
+  padding: 0.65rem 1.25rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.persona-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.persona-save-btn {
+  background: #4a90e2;
+  color: #fff;
+}
+
+.persona-save-btn:not(:disabled):hover {
+  background: #3b7dd0;
+}
+
+.persona-skip-btn {
+  background: rgba(51, 65, 85, 0.7);
+  color: #e2e8f0;
+}
+
+.persona-skip-btn:hover {
+  background: rgba(71, 85, 105, 0.8);
+}
+
+.persona-delete-btn {
+  background: transparent;
+  color: #fca5a5;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+}
+
+.persona-delete-btn:not(:disabled):hover {
+  background: rgba(248, 113, 113, 0.12);
+}
