@@ -423,6 +423,58 @@ class PersonaProfile(FirestoreModel):
         }
 
 
+# Confidence level attached to every generated personal impact and to the
+# narrative overall (Increment 8).
+ImpactConfidence = Literal["high", "medium", "low"]
+
+
+class PersonalImpact(FirestoreModel):
+    """A single grounded way a bill could affect a persona (Increment 8).
+
+    Every impact must cite at least one bill `section_id` (grounding is
+    enforced at generation time -- an impact whose cited sections are all
+    invalid is dropped, never stored uncited) and carries its own
+    `confidence` so a speculative indirect effect is never presented with
+    the same certainty as a directly-established one.
+    """
+
+    impact: str = Field(min_length=1)      # "what could affect you"
+    reasoning: str = Field(min_length=1)   # "why"
+    section_ids: List[str] = Field(min_length=1)
+    confidence: ImpactConfidence = "low"
+
+
+class PersonalImpactNarrative(FirestoreModel):
+    """A grounded, persona-specific explanation of how a bill could affect a
+    student (Increment 8).
+
+    `direct_impacts` are effects the bill text clearly establishes;
+    `possible_indirect_impacts` depend on implementation or behavior;
+    `uncertainties` are plain-language notes about what can't be determined
+    (often because the persona omitted a detail) and deliberately carry no
+    section citations. `persona` is a snapshot of the (possibly fictional)
+    persona representation used, never re-derived personal data. `section_ids`
+    is the validated union of every section cited across all impacts.
+    """
+
+    impact_id: str
+    lesson_id: str
+    bill_id: str
+    user_id: str
+    prompt_version: str
+
+    persona: dict = Field(default_factory=dict)
+    narrative: str = Field(min_length=1)
+    direct_impacts: List[PersonalImpact] = Field(default_factory=list)
+    possible_indirect_impacts: List[PersonalImpact] = Field(default_factory=list)
+    uncertainties: List[str] = Field(default_factory=list)
+    questions_to_consider: List[str] = Field(default_factory=list)
+    confidence: ImpactConfidence = "low"
+    section_ids: List[str] = Field(default_factory=list)
+
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 class LessonProgress(FirestoreModel):
     """A user's overall progress through a single lesson (vocab + quizzes).
 

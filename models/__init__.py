@@ -11,6 +11,8 @@ from .lesson_models import (
     OpenResponseQuestion,
     OpenResponseAttempt,
     PersonaProfile,
+    PersonalImpact,
+    PersonalImpactNarrative,
     LessonProgress,
 )
 
@@ -27,5 +29,7 @@ __all__ = [
     "OpenResponseQuestion",
     "OpenResponseAttempt",
     "PersonaProfile",
+    "PersonalImpact",
+    "PersonalImpactNarrative",
     "LessonProgress",
 ]
