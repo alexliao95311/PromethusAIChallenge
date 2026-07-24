@@ -246,3 +246,17 @@ export const deletePersona = async () => {
   const response = await apiClient.delete('/lesson/persona', { headers });
   return response.data;
 };
+
+// --- Lesson Mode: personalized bill-impact narrative ---
+// Generates a grounded explanation of how the bill could affect someone
+// matching the persona. `persona` (inline, possibly fictional) is optional;
+// when omitted the caller's saved persona is used. Requires auth.
+export const getPersonalImpact = async (lessonId, { billText, persona, model } = {}) => {
+  const headers = await getAuthHeaders();
+  const body = { lesson_id: lessonId };
+  if (billText) body.bill_text = billText;
+  if (persona) body.persona = persona;
+  if (model) body.model = model;
+  const response = await apiClient.post('/lesson/personal-impact', body, { headers });
+  return response.data;
+};
