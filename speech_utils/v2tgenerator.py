@@ -1,7 +1,15 @@
-import pyaudio
+try:
+    import pyaudio
+except ImportError:
+    pyaudio = None  # PortAudio/pyaudio not installed -- MicStream unavailable, but the
+    # rest of this module (and this package's other exports) can still be imported.
 import os
 from six.moves import queue
-from google.cloud import speech
+try:
+    from google.cloud import speech
+except ImportError:
+    speech = None  # google-cloud-speech not installed -- functions using it will
+    # raise clearly when called, but importing this module still succeeds.
 import threading
 import time
 
@@ -11,6 +19,10 @@ CHUNK = int(RATE / 10)  # 100ms chunks
 class MicStream:
     """Microphone stream for real-time speech recognition"""
     def __init__(self, rate, chunk):
+        if pyaudio is None:
+            raise RuntimeError(
+                "pyaudio is not installed. Install pyaudio (and PortAudio) to use MicStream."
+            )
         self._rate = rate
         self._chunk = chunk
         self._buff = queue.Queue()

@@ -8,7 +8,11 @@ import os
 import json
 import base64
 from typing import Dict, List, Optional
-from google.cloud import texttospeech
+try:
+    from google.cloud import texttospeech
+except ImportError:
+    texttospeech = None  # google-cloud-texttospeech not installed -- GoogleTTSService
+    # methods using it will raise clearly when called, but importing this module still succeeds.
 from google.oauth2 import service_account
 
 class GoogleTTSService:
