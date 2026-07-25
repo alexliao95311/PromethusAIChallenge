@@ -3,9 +3,9 @@
 Increment 1 added bill-section retrieval; Increment 2 added grounded lesson
 generation; Increment 3 added optional vocabulary generation; Increment 4
 added the adaptive (Leitner-box) flashcard review endpoints; Increment 5
-added grounded multiple-choice quiz generation; Increment 6 adds the
-open-response question and its grading -- see
-docs/LESSON_MODE_ARCHITECTURE.md.
+added grounded multiple-choice quiz generation; Increment 6 added the
+open-response question and its grading; Increment 9 adds dynamic opposing
+debate personas -- see docs/LESSON_MODE_ARCHITECTURE.md.
 """
 
 import logging
@@ -25,6 +25,11 @@ from models.lesson_models import (
     QuizAttempt,
 )
 from services.auth import get_current_user_id
+from services.dynamic_persona_generation import (
+    DynamicPersonaGenerationError,
+    DynamicPersonaGenerationService,
+    generate_socratic_hint,
+)
 from services.flashcard_review import (
     CardNotInLessonError,
     FlashcardReviewService,
@@ -68,6 +73,9 @@ _open_response_grading_service = OpenResponseGradingService()
 _persona_service = PersonaService(repository=_lesson_generation_service.repository)
 _persona_impact_service = PersonaImpactGenerationService(
     rag_service=_rag_service, repository=_lesson_generation_service.repository
+)
+_dynamic_persona_generation_service = DynamicPersonaGenerationService(
+    repository=_lesson_generation_service.repository
 )
 
 
@@ -604,7 +612,12 @@ async def delete_persona(user_id: str = Depends(get_current_user_id)):
 
 class PersonaOverride(BaseModel):
     """An inline, possibly-fictional persona so a student can explore impacts
-    without first saving one. Same broad, optional fields as PersonaProfile."""
+    without first saving one. Same broad, optional fields as PersonaProfile.
+
+    Increment 9's dynamic opposing-persona endpoint reuses this same shape
+    (as `request.student_persona`) rather than introducing a duplicate
+    input model -- both features need the same optional
+    occupation/state/age_range/income_bracket context."""
 
     occupation: Optional[str] = None
     state: Optional[str] = None
@@ -686,3 +699,84 @@ async def personal_impact(
         confidence=narrative.confidence,
         section_ids=narrative.section_ids,
     )
+
+
+# ---------------------------------------------------------------------------
+# Dynamic opposing debate persona (Increment 9)
+#
+# Distinct from Increment 8's personal-impact narrative above: this
+# generates the AI's *debate opponent* -- a bill-grounded stakeholder with a
+# meaningfully different perspective -- not an explanation of impact on the
+# student. No auth required: a generated persona is lesson-scoped, reusable
+# content (like a quiz question), not per-user state.
+# ---------------------------------------------------------------------------
+
+class GeneratePersonaRequest(BaseModel):
+    student_persona: Optional[PersonaOverride] = None
+    model: str = DEFAULT_LESSON_MODEL
+
+
+class DynamicPersonaResponse(BaseModel):
+    persona_id: str
+    role: str
+    location_context: str
+    interests: List[str]
+    likely_concerns: List[str]
+    position: str
+    section_ids: List[str]
+    reason_for_selection: str
+    persona_prompt: str
+
+
+@router.post("/{lesson_id}/debate-persona/generate", response_model=DynamicPersonaResponse)
+async def generate_debate_persona(lesson_id: str, request: GeneratePersonaRequest):
+    logger.info(
+        "POST /lesson/%s/debate-persona/generate has_student_persona=%s",
+        lesson_id, request.student_persona is not None,
+    )
+    student_persona = None
+    if request.student_persona is not None:
+        student_persona = PersonaProfile(user_id="anonymous", **request.student_persona.model_dump())
+
+    try:
+        persona = await _dynamic_persona_generation_service.generate_persona(
+            lesson_id=lesson_id, student_persona=student_persona, model=request.model
+        )
+    except DynamicPersonaGenerationError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in /lesson/{lesson_id}/debate-persona/generate: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generating debate persona")
+
+    return DynamicPersonaResponse(**persona.model_dump(exclude={"lesson_id", "created_at"}))
+
+
+class SocraticHintRequest(BaseModel):
+    persona_id: str = Field(..., min_length=1)
+    full_transcript: str = Field(default="")
+
+
+class SocraticHintResponse(BaseModel):
+    hint: str
+
+
+@router.post("/{lesson_id}/debate-persona/hint", response_model=SocraticHintResponse)
+async def get_socratic_hint(lesson_id: str, request: SocraticHintRequest):
+    """Learning-mode only: an optional Socratic hint for the student,
+    generated on demand (competition mode simply never calls this
+    endpoint -- it's additive, not a mode switch on the debate engine
+    itself)."""
+    logger.info("POST /lesson/%s/debate-persona/hint persona_id=%s", lesson_id, request.persona_id)
+    persona = _lesson_generation_service.repository.get_dynamic_persona(request.persona_id)
+    if persona is None or persona.lesson_id != lesson_id:
+        raise HTTPException(
+            status_code=404, detail=f"No debate persona found for persona_id={request.persona_id!r}"
+        )
+
+    try:
+        hint = await generate_socratic_hint(persona, request.full_transcript)
+    except Exception as e:
+        logger.error(f"Error in /lesson/{lesson_id}/debate-persona/hint: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generating hint")
+
+    return SocraticHintResponse(hint=hint)

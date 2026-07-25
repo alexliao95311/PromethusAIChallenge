@@ -475,6 +475,37 @@ class PersonalImpactNarrative(FirestoreModel):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+class DynamicPersona(FirestoreModel):
+    """A grounded, generated opposing-stakeholder *debate* persona (Increment
+    9) -- a real interest group affected by the bill, chosen to differ
+    meaningfully from the student's own perspective, that becomes the AI's
+    debate opponent. `persona_prompt` is pre-formatted with the "PERSONA
+    INSTRUCTIONS:" marker that `chains/debater_chain.py`'s existing
+    `process_inputs` already knows how to extract, so this plugs into the
+    unmodified debate engine as-is.
+
+    This is distinct from Increment 8's `PersonalImpactNarrative`, which
+    explains how the bill affects the *student's own* persona rather than
+    producing an opposing debate voice; Increment 9 generates its opposing
+    persona directly and does not duplicate that narrative here.
+    """
+
+    persona_id: str
+    lesson_id: str
+
+    role: str = Field(min_length=1)
+    location_context: str = Field(min_length=1)
+    interests: List[str] = Field(min_length=1)
+    likely_concerns: List[str] = Field(min_length=1)
+    position: str = Field(min_length=1)
+    section_ids: List[str] = Field(min_length=1)
+    reason_for_selection: str = Field(min_length=1)
+
+    persona_prompt: str = Field(min_length=1)
+
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 class LessonProgress(FirestoreModel):
     """A user's overall progress through a single lesson (vocab + quizzes).
 

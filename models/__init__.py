@@ -13,6 +13,7 @@ from .lesson_models import (
     PersonaProfile,
     PersonalImpact,
     PersonalImpactNarrative,
+    DynamicPersona,
     LessonProgress,
 )
 
@@ -31,5 +32,6 @@ __all__ = [
     "PersonaProfile",
     "PersonalImpact",
     "PersonalImpactNarrative",
+    "DynamicPersona",
     "LessonProgress",
 ]

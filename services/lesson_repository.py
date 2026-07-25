@@ -20,6 +20,7 @@ from models.lesson_models import (
     OpenResponseAttempt,
     PersonaProfile,
     PersonalImpactNarrative,
+    DynamicPersona,
     LessonProgress,
 )
 from services.firebase_client import get_firestore_db
@@ -36,6 +37,7 @@ COLLECTION_OPEN_RESPONSE_QUESTIONS = "open_response_questions"
 COLLECTION_OPEN_RESPONSE_ATTEMPTS = "open_response_attempts"
 COLLECTION_PERSONA_PROFILES = "persona_profiles"
 COLLECTION_PERSONAL_IMPACT_NARRATIVES = "personal_impact_narratives"
+COLLECTION_DYNAMIC_PERSONAS = "dynamic_personas"
 COLLECTION_LESSON_PROGRESS = "lesson_progress"
 
 
@@ -170,6 +172,19 @@ class LessonRepository:
         if not doc.exists:
             return None
         return OpenResponseAttempt.from_firestore_dict(doc.to_dict())
+
+    # -- DynamicPersona --------------------------------------------------
+    def create_dynamic_persona(self, persona: DynamicPersona) -> str:
+        self.db.collection(COLLECTION_DYNAMIC_PERSONAS).document(persona.persona_id).set(
+            persona.to_firestore_dict()
+        )
+        return persona.persona_id
+
+    def get_dynamic_persona(self, persona_id: str) -> Optional[DynamicPersona]:
+        doc = self.db.collection(COLLECTION_DYNAMIC_PERSONAS).document(persona_id).get()
+        if not doc.exists:
+            return None
+        return DynamicPersona.from_firestore_dict(doc.to_dict())
 
     # -- PersonaProfile ------------------------------------------------
     def upsert_persona_profile(self, profile: PersonaProfile) -> str:

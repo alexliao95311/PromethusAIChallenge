@@ -1,16 +1,14 @@
 # Lesson Mode Architecture
 
-Status: **Increment 8 — Personalized Bill-Impact Narrative.** Generates a
-grounded, persona-specific explanation of how a bill could affect a student,
-separating effects the bill clearly establishes (`direct_impacts`) from
-effects that depend on implementation/behavior (`possible_indirect_impacts`)
-and what stays `uncertain`. Every impact cites validated bill section_ids and
-carries its own confidence; overall confidence is capped when nothing is
-directly established, so the narrative never overstates certainty. Retrieval
-is persona-driven (RAG queries built from the persona's own attributes), so
-different personas on the same bill get meaningfully different explanations.
-Flashcard/quiz analytics still do not exist; existing debate/bill
-functionality is untouched.
+Status: **Increment 9 — Dynamic Opposing Debate Persona.** Adds a
+generated, bill-grounded opposing stakeholder persona that plugs into
+DebateSim's existing, unmodified debate engine (`chains/debater_chain.py`)
+via the `"PERSONA INSTRUCTIONS:"` marker it already supported but the
+frontend never used. Distinct from Increment 8's `PersonalImpactNarrative`
+(which explains impact on the *student's own* persona): this generates the
+*opposing debate voice*. Flashcard/quiz analytics and a Lesson Mode
+frontend page still do not exist; existing debate/bill functionality is
+untouched -- see "Dynamic debate persona" below.
 
 ## Why
 
@@ -270,11 +268,59 @@ Increment 8 adds:
   `frontend/src/components/LessonPersonalImpact.test.jsx` (frontend) -- see
   Testing.
 
+Increment 9 adds:
+
+- `services/dynamic_persona_generation.py` — `DynamicPersonaGenerationService.generate_persona(lesson_id,
+  student_persona=None, model=...)`, producing one `DynamicPersona`: a
+  bill-grounded opposing stakeholder (never inventing facts -- drawn from
+  the lesson's own `stakeholders`/`con_arguments`/`pro_arguments`/`major_provisions`
+  `GroundedClaim`s, the same source material Increment 6 uses).
+  `student_persona` reuses `PersonaOverride`/`PersonaProfile` (Increment
+  7's validated student-context model) -- omitting it is the "persona
+  skipped" path, and the system prompt explicitly forbids inferring the
+  opponent's traits from the student's demographics either way. This is a
+  distinct feature from Increment 8's `PersonaImpactGenerationService`:
+  that explains impact on the student's own persona; this generates the
+  AI's opposing debate voice, and does not duplicate the impact narrative.
+- **The entire integration surface with the existing debate engine is one
+  function**: `build_persona_prompt(draft)` formats the persona as a
+  `"PERSONA INSTRUCTIONS:"` block. `chains/debater_chain.py`'s existing,
+  *unmodified* `process_inputs` (line ~1097) already extracts persona
+  instructions from exactly that marker (alongside `"SPEAKING STYLE:"`,
+  used by the frontend's fixed celebrity personas, and
+  `"DEBATE STYLE INSTRUCTIONS:"`, unused by either) -- so wiring a
+  generated persona into a live debate requires zero changes to
+  `chains/debater_chain.py` or `main.py`'s `/generate-response` endpoint.
+  `_sanitize_for_persona_prompt` strips any of the four substrings
+  (`"Instructions:"`, `"Your role:"`, `"Bill description:"`, `"Debate topic:"`)
+  that the existing extractor treats as an early end-of-persona marker, so
+  the generated body is never silently truncated by that unmodified logic.
+- `generate_socratic_hint(persona, full_transcript, ...)` — a single-shot
+  helper for an optional "learning mode" hint (one Socratic question, not
+  an answer), reusing the same `OpenRouterChat`-backed call pattern as the
+  rest of Lesson Mode generation. This is additive, not a new debate
+  engine or a mode switch inside `chains/debater_chain.py`: competition
+  mode simply never calls the hint endpoint.
+- Two new endpoints: `POST /lesson/{lesson_id}/debate-persona/generate`
+  (`student_persona` optional) and `POST /lesson/{lesson_id}/debate-persona/hint`.
+  Neither endpoint requires auth (no per-user state is written -- a
+  generated persona is lesson-scoped, reusable content, like a quiz
+  question) and neither touches `main.py`.
+- `tests/test_debater_chain_integration.py` — integration tests against
+  the **real** `chains.debater_chain.get_debater_chain(...)` pipeline
+  (only `OpenRouterChat._agenerate` is stubbed to avoid a network call),
+  proving a generated persona's full text reaches the final rendered
+  prompt untruncated, alongside regression coverage for Public Forum,
+  Lincoln-Douglas, the default bill-debate format, the existing
+  `"SPEAKING STYLE:"` fixed-persona path, the "persona skipped" path, and
+  the AI-vs-AI detailed-prompt bypass.
+
 Future increments are expected to add: a full Lesson Mode page/route that
 actually mounts `LessonFlashcards`/`LessonQuiz`/`LessonOpenResponse`/
-`LessonPersonalImpact` (only `PersonaBuilder` is mounted so far, at
-`/lesson/persona`; the rest are built + tested but await the lesson page --
-see Non-goals).
+`LessonPersonalImpact`/the dynamic persona flow (only `PersonaBuilder` is
+mounted so far, at `/lesson/persona`; the rest are built + tested but await
+the lesson page -- see Non-goals). No frontend wiring exists yet for the
+dynamic persona endpoints specifically (see Non-goals for details).
 
 ## Data models (`models/lesson_models.py`)
 
@@ -303,6 +349,7 @@ All lesson-mode models inherit from a small `FirestoreModel` base
 | `PersonaProfile` | Student-built, optional, possibly-fictional persona for personalization (Increment 7) | `user_id`, `occupation` (broad category or free text, ≤80 chars), `state` (two-letter USPS code), `age_range` (one of `AGE_RANGES`), `income_bracket` (one of `INCOME_BRACKETS`) — every field except `user_id` optional; `to_impact_representation()` yields the generator-facing view |
 | `PersonalImpact` | One grounded way a bill could affect a persona (Increment 8) | `impact` (what), `reasoning` (why), `section_ids` (validated, non-empty), `confidence` (`high`\|`medium`\|`low`) |
 | `PersonalImpactNarrative` | A persona-specific, grounded bill-impact explanation (Increment 8) | `impact_id`, `lesson_id`, `bill_id`, `user_id`, `prompt_version`, `persona` (snapshot), `narrative`, `direct_impacts`/`possible_indirect_impacts` (`List[PersonalImpact]`), `uncertainties`, `questions_to_consider`, `confidence`, `section_ids` (validated union), `created_at` |
+| `DynamicPersona` | A grounded opposing *debate* persona (Increment 9) | `persona_id`, `lesson_id`, `role`, `location_context`, `interests`, `likely_concerns`, `position`, `section_ids`, `reason_for_selection`, `persona_prompt`, `created_at` |
 | `LessonProgress` | Overall per-user progress on a lesson | `user_id`, `lesson_id`, `vocab_mastered`, `vocab_total`, `quiz_attempts`, `best_quiz_score`, `completed`, `current_session` (Increment 4: Leitner session counter), `updated_at` |
 
 Validation is enforced via Pydantic field constraints (e.g. `BillSection.text`
@@ -734,6 +781,69 @@ persona descriptor + lesson summary + citable sections -> one model call ->
   other `Lesson*` components it is built + tested but not yet mounted in a
   page (no Lesson Mode page exists -- see Non-goals).
 
+## Dynamic debate persona (`services/dynamic_persona_generation.py`, Increment 9)
+
+```
+Lesson's own grounded facts (stakeholders/con/pro/provisions) + optional
+  student PersonaProfile -> one model call (never invents facts, never
+  infers opponent traits from student demographics) -> DynamicPersona
+  (role, interests, concerns, position, section_ids, reason_for_selection)
+  -> build_persona_prompt: format as a "PERSONA INSTRUCTIONS:" block ->
+  handed to the EXISTING, UNMODIFIED chains.debater_chain.get_debater_chain(...)
+  exactly as the frontend already hands it a "SPEAKING STYLE:" block for
+  Trump/Harris/Musk/Drake
+```
+
+- **No second debate engine.** `chains/debater_chain.py` and `main.py` have
+  a **zero-line diff** from this increment (verified: `git diff --stat
+  chains/debater_chain.py main.py frontend/` is empty). The only
+  integration surface is the text format: `process_inputs`
+  (`chains/debater_chain.py:1097`) already scans an incoming prompt for
+  `"SPEAKING STYLE:"`, `"DEBATE STYLE INSTRUCTIONS:"`, or
+  `"PERSONA INSTRUCTIONS:"` and extracts everything up to the first of
+  `"Instructions:"`/`"Your role:"`/`"Bill description:"`/`"Debate topic:"`.
+  This module targets the third marker (the only one of the three the
+  frontend doesn't already use), so a caller wires a generated persona into
+  a live debate the same way the frontend wires a fixed persona: pass
+  `persona.persona_prompt` as both `request.prompt` and (implicitly,
+  because `main.py:280` already forwards `prompt` as `persona_prompt` too)
+  the extraction input -- no backend change needed to make that work.
+- **Grounding**: the model receives only the lesson's own `GroundedClaim`s
+  (stakeholders and con-arguments first, since they're most likely to
+  surface a genuine opposing interest, then pro-arguments and provisions)
+  as "Available facts," and `ground_persona_draft` drops any `section_ids`
+  outside that set -- raising `DynamicPersonaGenerationError` if *none* of
+  the model's cited sections survive, so a persona is never returned
+  ungrounded.
+- **No stereotyping**: the system prompt explicitly instructs the model to
+  ground the opponent's position "only in a concrete role and interest
+  that the bill itself affects," never in the student's demographic
+  traits, and `_format_student_context` labels the student fields as "use
+  only to gauge which stakeholder perspective would be meaningfully
+  different -- never to assume the opponent's traits." When no student
+  context is supplied (the "persona skipped" path), the prompt says so
+  explicitly rather than silently omitting the instruction.
+- **"Show the student why this stakeholder was selected"**:
+  `reason_for_selection` is a first-class field on `DynamicPersona` and the
+  public API response -- never buried in the persona_prompt sent to the
+  debate engine (that text is written for the *opponent* to argue from,
+  not for the student to read as an explanation).
+- **Distinct from Increment 8**: `student_persona` reuses the same
+  `PersonaOverride`/`PersonaProfile` shape as the personal-impact feature
+  (both need the same optional occupation/state/age_range/income_bracket
+  context), but this module does not generate or duplicate a personal-
+  impact narrative -- that remains `PersonaImpactGenerationService`'s job.
+  `DynamicPersona` has no `personalized_impact_narrative` field.
+- **Learning mode / Socratic hints**: `generate_socratic_hint(persona,
+  full_transcript, ...)` is an independent, single-shot helper (its own
+  system prompt instructs the model to coach, not debate) reusing the same
+  `OpenRouterChat`-backed call pattern as the rest of Lesson Mode
+  generation -- not a second reasoning engine. `POST
+  /lesson/{lesson_id}/debate-persona/hint` is purely additive: competition
+  mode is "standard mode" unchanged, since it simply never calls this
+  endpoint. There is no `learning_mode` flag inside `chains/debater_chain.py`
+  itself, preserving that module exactly as it was.
+
 ## Testing
 
 `tests/fake_firestore.py` implements the minimal subset of the
@@ -815,6 +925,25 @@ question and an empty textarea, submitting and displaying score/feedback,
 showing both accurate and missed points, the "Try Again" reset, and a
 load-error state.
 
+`tests/test_dynamic_persona_generation.py` covers section_id grounding
+(filtering unknown ids, raising when none survive), `build_persona_prompt`
+(starts with the `"PERSONA INSTRUCTIONS:"` marker, never contains a
+truncation marker, includes role/position, instructs respectful
+challenge), generation with and without student context (and that
+demographic details never leak into the "no context" prompt), persistence,
+unknown-lesson/no-content errors, a grounding check across ten generated
+personas (all `section_ids` subsets of the lesson's own facts), and the
+Socratic hint helper. `tests/test_debater_chain_integration.py` is the
+integration suite required by the spec: it runs the **real**
+`get_debater_chain(...)` pipeline with only `OpenRouterChat._agenerate`
+stubbed out, proving a generated persona's full text reaches the rendered
+prompt untruncated, plus regression tests for Public Forum,
+Lincoln-Douglas, the default bill-debate format, the existing
+`"SPEAKING STYLE:"` fixed-persona extraction, the persona-skipped path,
+and the AI-vs-AI detailed-prompt bypass. `tests/test_dynamic_persona_routes.py`
+covers both new endpoints (persona provided/skipped, unknown lesson,
+missing persona for a hint request).
+
 Run the Python suite with:
 
 ```bash
@@ -855,3 +984,20 @@ cd frontend && npm test
   `app.include_router(lesson_router)`); `billsearch.py`,
   `legiscan_service.py`, `ca_propositions_service.py`, and the rest of
   `chains/` are untouched.
+- No frontend wiring for the Increment 9 dynamic persona flow yet:
+  `Legislation.jsx` doesn't call `POST /lesson/{lesson_id}/debate-persona/generate`
+  or pass a generated `persona_prompt` into `Debate.jsx`'s existing
+  `generateAIResponse(...)` call the way it already does for fixed
+  personas -- that wiring, plus a "why this stakeholder" UI and a hint
+  button for learning mode, is left for a future increment. The backend
+  contract (a `persona_prompt` string in the exact shape
+  `debater_chain.py` already parses) is what makes that wiring a small,
+  low-risk frontend-only change when it happens.
+- No `bill_id` is currently threaded from `Legislation.jsx` into
+  `Debate.jsx`'s location state -- only already-extracted `billText`/`billTitle`
+  survive that navigation. Wiring the persona endpoints into the real
+  debate flow will need a `lesson_id` (or `bill_id`) added to that state,
+  which is a `Legislation.jsx` change, not a backend one.
+- Increment 9's dynamic debate persona endpoints are unauthenticated (no
+  per-user state is written), unlike Increment 7/8's persona/impact
+  endpoints which require auth.
