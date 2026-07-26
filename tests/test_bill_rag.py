@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from services.rag.cache import InMemoryEmbeddingCache, compute_text_hash
 from services.rag.retrieval_service import BillNotCachedError, BillRagService
 from services.rag.section_splitter import split_bill_into_sections
+from tests.fake_embeddings import FakeEmbeddingProvider
 
 SAMPLE_BILL = """
 SECTION 1. SHORT TITLE.
@@ -51,6 +52,21 @@ BILL_ID = "hr1-119"
 
 @pytest.fixture
 def service():
+    """A lightweight, dependency-free fixture for tests that need *some*
+    consistent embedding (caching, top_k/ordering, error handling) but not
+    real semantic quality -- see tests/fake_embeddings.py. Does not require
+    sentence-transformers/torch to be installed."""
+    return BillRagService(
+        cache=InMemoryEmbeddingCache(), embedding_provider_factory=FakeEmbeddingProvider
+    )
+
+
+@pytest.fixture
+def quality_service():
+    """Real semantic embeddings, for tests whose assertions genuinely
+    depend on retrieval quality. Skips (not errors) when the ML stack
+    isn't installed."""
+    pytest.importorskip("sentence_transformers")
     return BillRagService(cache=InMemoryEmbeddingCache())
 
 
@@ -195,8 +211,8 @@ def test_bill_with_no_sections_returns_empty_list(service):
         ("How does this affect small businesses?", "section-4"),  # Stakeholder Impact
     ],
 )
-def test_manual_retrieval_quality_queries(service, query, expected_section_id):
-    results = service.retrieve_relevant_sections(BILL_ID, query, top_k=3, bill_text=SAMPLE_BILL)
+def test_manual_retrieval_quality_queries(quality_service, query, expected_section_id):
+    results = quality_service.retrieve_relevant_sections(BILL_ID, query, top_k=3, bill_text=SAMPLE_BILL)
     top_ids = [r.section_id for r in results]
     assert expected_section_id in top_ids, (
         f"Expected {expected_section_id} in top 3 for query {query!r}, got {top_ids}"
@@ -226,11 +242,19 @@ def test_query_type_coverage_returns_nonempty_results(service, query):
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def client():
-    from routes.lesson_routes import router
+def client(monkeypatch):
+    import routes.lesson_routes as lesson_routes
+
+    # Endpoint tests only need plumbing (request -> response shape), not
+    # real semantic quality, so swap in the lightweight fake provider too.
+    monkeypatch.setattr(
+        lesson_routes,
+        "_rag_service",
+        BillRagService(embedding_provider_factory=FakeEmbeddingProvider),
+    )
 
     app = FastAPI()
-    app.include_router(router)
+    app.include_router(lesson_routes.router)
     return TestClient(app)
 
 

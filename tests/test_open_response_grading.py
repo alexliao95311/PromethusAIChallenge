@@ -8,6 +8,12 @@ import json
 
 import pytest
 
+# The irrelevance pre-check (MIN_RELEVANCE_SIMILARITY) is calibrated against
+# real embeddings, so these tests need the real sentence-transformers model
+# rather than a fake -- skip cleanly (not error) when the ML stack isn't
+# installed.
+pytest.importorskip("sentence_transformers")
+
 from models.lesson_models import OpenResponseQuestion
 from services.open_response_grading import (
     MIN_ANSWER_CHARS,

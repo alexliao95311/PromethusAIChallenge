@@ -5,6 +5,12 @@ import json
 
 import pytest
 
+# Submitting a non-degenerate answer routes through the irrelevance
+# pre-check (calibrated against real embeddings), so these tests need the
+# real sentence-transformers model -- skip cleanly (not error) when the ML
+# stack isn't installed.
+pytest.importorskip("sentence_transformers")
+
 from models.lesson_models import GroundedClaim, Lesson
 from services.lesson_repository import LessonRepository
 from services.open_response_generation import OpenResponseGenerationService

@@ -15,6 +15,7 @@ from services.vocabulary_generation import (
     VocabularyGenerationService,
     ground_vocabulary_draft,
 )
+from tests.fake_embeddings import FakeEmbeddingProvider
 from tests.fake_firestore import FakeFirestoreClient
 
 SAMPLE_BILL = """
@@ -86,7 +87,10 @@ def repo():
 
 @pytest.fixture
 def rag_service():
-    return BillRagService()
+    # Lightweight, dependency-free fake -- these tests validate generation
+    # logic against a mocked LLM, not retrieval quality, so no real
+    # embedding model (sentence-transformers/torch) is required.
+    return BillRagService(embedding_provider_factory=FakeEmbeddingProvider)
 
 
 # ---------------------------------------------------------------------------

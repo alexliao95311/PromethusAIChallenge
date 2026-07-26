@@ -8,6 +8,12 @@ import json
 
 import pytest
 
+# The distractor pipeline's exact-duplicate/near-duplicate thresholds
+# (MAX_DISTRACTOR_SIMILARITY) are calibrated against real embeddings, so
+# these tests need the real sentence-transformers model rather than a fake
+# -- skip cleanly (not error) when the ML stack isn't installed.
+pytest.importorskip("sentence_transformers")
+
 from models.lesson_models import Flashcard, GroundedClaim, Lesson
 from services.lesson_repository import LessonRepository
 from services.quiz_generation import (
