@@ -21,6 +21,7 @@ from models.lesson_models import (
     PersonaProfile,
     PersonalImpactNarrative,
     DynamicPersona,
+    DebateReflection,
     LessonProgress,
 )
 from services.firebase_client import get_firestore_db
@@ -39,6 +40,7 @@ COLLECTION_PERSONA_PROFILES = "persona_profiles"
 COLLECTION_PERSONAL_IMPACT_NARRATIVES = "personal_impact_narratives"
 COLLECTION_DYNAMIC_PERSONAS = "dynamic_personas"
 COLLECTION_LESSON_PROGRESS = "lesson_progress"
+COLLECTION_DEBATE_REFLECTIONS = "debate_reflections"
 
 
 def _user_card_progress_doc_id(user_id: str, card_id: str) -> str:
@@ -220,6 +222,29 @@ class LessonRepository:
         if not doc.exists:
             return None
         return PersonalImpactNarrative.from_firestore_dict(doc.to_dict())
+
+    # -- DebateReflection (Increment 10) --------------------------------
+    def create_debate_reflection(self, reflection: DebateReflection) -> str:
+        self.db.collection(COLLECTION_DEBATE_REFLECTIONS).document(
+            reflection.reflection_id
+        ).set(reflection.to_firestore_dict())
+        return reflection.reflection_id
+
+    def get_debate_reflection(self, reflection_id: str) -> Optional[DebateReflection]:
+        doc = self.db.collection(COLLECTION_DEBATE_REFLECTIONS).document(reflection_id).get()
+        if not doc.exists:
+            return None
+        return DebateReflection.from_firestore_dict(doc.to_dict())
+
+    def list_debate_reflections(self, user_id: str) -> list:
+        """Every reflection a user has submitted, across every lesson
+        debate, oldest first -- powers the cross-lesson progress view."""
+        docs = self.db.collection(COLLECTION_DEBATE_REFLECTIONS).where(
+            "user_id", "==", user_id
+        ).stream()
+        reflections = [DebateReflection.from_firestore_dict(doc.to_dict()) for doc in docs]
+        reflections.sort(key=lambda r: r.created_at)
+        return reflections
 
     # -- LessonProgress ------------------------------------------------
     def upsert_lesson_progress(self, progress: LessonProgress) -> str:

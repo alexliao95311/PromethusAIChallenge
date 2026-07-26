@@ -306,3 +306,25 @@ export const getSocraticHint = async (lessonId, personaId, fullTranscript = '') 
   });
   return response.data;
 };
+
+// --- Lesson Mode: post-debate reflection (Increment 10) ---
+// Auth required -- a reflection is per-user state, read back across every
+// lesson debate by getReflectionProgress.
+export const submitReflection = async (
+  lessonId,
+  { transcript, viewChanged, explanation, personaId, model } = {}
+) => {
+  const headers = await getAuthHeaders();
+  const body = { transcript, view_changed: viewChanged };
+  if (explanation) body.explanation = explanation;
+  if (personaId) body.persona_id = personaId;
+  if (model) body.model = model;
+  const response = await apiClient.post(`/lesson/${lessonId}/reflection`, body, { headers });
+  return response.data;
+};
+
+export const getReflectionProgress = async () => {
+  const headers = await getAuthHeaders();
+  const response = await apiClient.get('/lesson/reflection/progress', { headers });
+  return response.data;
+};

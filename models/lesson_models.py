@@ -506,6 +506,50 @@ class DynamicPersona(FirestoreModel):
     created_at: datetime = Field(default_factory=_utcnow)
 
 
+ViewChangeResponse = Literal["yes", "somewhat", "no", "less_certain"]
+
+
+class ReflectionFeedbackItem(FirestoreModel):
+    """A single piece of educational feedback about a student's debate
+    performance (Increment 10), grounded in the debate transcript itself
+    rather than in bill text -- `transcript_excerpt` is a verbatim quote
+    from the transcript supporting `feedback`, or `None` when no excerpt
+    could be verified."""
+
+    feedback: str = Field(min_length=1)
+    transcript_excerpt: Optional[str] = None
+
+
+class DebateReflection(FirestoreModel):
+    """A student's post-debate reflection (Increment 10): their own
+    self-reported answer to "did your view change?", plus a grounded
+    educational judge analysis of the same transcript.
+
+    `view_changed` is always the student's own self-report -- it is never
+    inferred from the transcript or the educational analysis, which use a
+    rubric that is deliberately separate from `chains/judge_chain.py`'s
+    winner-determination judging and never declares a winner.
+    """
+
+    reflection_id: str
+    lesson_id: str
+    user_id: str
+    persona_id: Optional[str] = None
+
+    view_changed: ViewChangeResponse
+    explanation: Optional[str] = None
+
+    strongest_student_argument: ReflectionFeedbackItem
+    weakest_reasoning_step: ReflectionFeedbackItem
+    evidence_use_feedback: ReflectionFeedbackItem
+    missed_opponent_point: ReflectionFeedbackItem
+    perspective_understanding: ReflectionFeedbackItem
+    recommended_skill: str = Field(min_length=1)
+    recommended_next_activity: str = Field(min_length=1)
+
+    created_at: datetime = Field(default_factory=_utcnow)
+
+
 class LessonProgress(FirestoreModel):
     """A user's overall progress through a single lesson (vocab + quizzes).
 

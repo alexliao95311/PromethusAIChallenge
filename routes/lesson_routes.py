@@ -10,7 +10,8 @@ debate personas -- see docs/LESSON_MODE_ARCHITECTURE.md.
 
 import logging
 import uuid
-from typing import List, Optional
+from datetime import datetime
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, ValidationError
@@ -53,6 +54,7 @@ from services.persona_impact_generation import (
 from services.persona_service import PersonaService, PersonaValidationError
 from services.quiz_generation import QuizGenerationError, QuizGenerationService
 from services.rag.retrieval_service import BillNotCachedError, BillRagService, RetrievedSection
+from services.reflection_generation import ReflectionGenerationError, ReflectionGenerationService
 from services.vocabulary_generation import VocabularyGenerationError, VocabularyGenerationService
 
 logger = logging.getLogger(__name__)
@@ -75,6 +77,9 @@ _persona_impact_service = PersonaImpactGenerationService(
     rag_service=_rag_service, repository=_lesson_generation_service.repository
 )
 _dynamic_persona_generation_service = DynamicPersonaGenerationService(
+    repository=_lesson_generation_service.repository
+)
+_reflection_generation_service = ReflectionGenerationService(
     repository=_lesson_generation_service.repository
 )
 
@@ -800,3 +805,118 @@ async def get_socratic_hint(lesson_id: str, request: SocraticHintRequest):
         raise HTTPException(status_code=500, detail="Error generating hint")
 
     return SocraticHintResponse(hint=hint)
+
+
+# ---------------------------------------------------------------------------
+# Post-debate reflection and feedback (Increment 10)
+#
+# After a Lesson Mode debate (Increment 9's dynamic opposing persona), the
+# student self-reports whether their view changed, and this generates a
+# grounded educational judge analysis of the same transcript -- reusing
+# `OpenRouterChat` from `chains/judge_chain.py` with a rubric that is
+# separate from winner-determination and never infers belief change from
+# debate performance. Auth is required: reflections are per-user state, and
+# the progress endpoint below reads them back across every lesson.
+# ---------------------------------------------------------------------------
+
+class SubmitReflectionRequest(BaseModel):
+    transcript: str = Field(..., min_length=1)
+    view_changed: Literal["yes", "somewhat", "no", "less_certain"]
+    explanation: Optional[str] = None
+    persona_id: Optional[str] = None
+    model: str = DEFAULT_LESSON_MODEL
+
+
+class ReflectionFeedbackItemResponse(BaseModel):
+    feedback: str
+    transcript_excerpt: Optional[str] = None
+
+
+class ReflectionResponse(BaseModel):
+    reflection_id: str
+    lesson_id: str
+    view_changed: str
+    explanation: Optional[str] = None
+    strongest_student_argument: ReflectionFeedbackItemResponse
+    weakest_reasoning_step: ReflectionFeedbackItemResponse
+    evidence_use_feedback: ReflectionFeedbackItemResponse
+    missed_opponent_point: ReflectionFeedbackItemResponse
+    perspective_understanding: ReflectionFeedbackItemResponse
+    recommended_skill: str
+    recommended_next_activity: str
+    created_at: datetime
+
+
+def _reflection_response(reflection) -> ReflectionResponse:
+    return ReflectionResponse(
+        reflection_id=reflection.reflection_id,
+        lesson_id=reflection.lesson_id,
+        view_changed=reflection.view_changed,
+        explanation=reflection.explanation,
+        strongest_student_argument=ReflectionFeedbackItemResponse(
+            **reflection.strongest_student_argument.model_dump()
+        ),
+        weakest_reasoning_step=ReflectionFeedbackItemResponse(
+            **reflection.weakest_reasoning_step.model_dump()
+        ),
+        evidence_use_feedback=ReflectionFeedbackItemResponse(
+            **reflection.evidence_use_feedback.model_dump()
+        ),
+        missed_opponent_point=ReflectionFeedbackItemResponse(
+            **reflection.missed_opponent_point.model_dump()
+        ),
+        perspective_understanding=ReflectionFeedbackItemResponse(
+            **reflection.perspective_understanding.model_dump()
+        ),
+        recommended_skill=reflection.recommended_skill,
+        recommended_next_activity=reflection.recommended_next_activity,
+        created_at=reflection.created_at,
+    )
+
+
+@router.post("/{lesson_id}/reflection", response_model=ReflectionResponse)
+async def submit_reflection(
+    lesson_id: str, request: SubmitReflectionRequest, user_id: str = Depends(get_current_user_id)
+):
+    logger.info(
+        "POST /lesson/%s/reflection user_id=%s view_changed=%s",
+        lesson_id, user_id, request.view_changed,
+    )
+    _get_lesson_or_404(lesson_id)
+
+    try:
+        reflection = await _reflection_generation_service.generate_reflection(
+            reflection_id=str(uuid.uuid4()),
+            lesson_id=lesson_id,
+            user_id=user_id,
+            transcript=request.transcript,
+            view_changed=request.view_changed,
+            explanation=request.explanation,
+            persona_id=request.persona_id,
+            model=request.model,
+        )
+    except ReflectionGenerationError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in /lesson/{lesson_id}/reflection: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Error generating reflection")
+
+    return _reflection_response(reflection)
+
+
+class ReflectionProgressResponse(BaseModel):
+    reflections: List[ReflectionResponse]
+
+
+@router.get("/reflection/progress", response_model=ReflectionProgressResponse)
+async def get_reflection_progress(user_id: str = Depends(get_current_user_id)):
+    """Every reflection the authenticated user has submitted, across every
+    lesson debate they've done -- oldest first. A 2-segment literal path
+    (`reflection/progress`), so it is never shadowed by the 1-segment
+    `/{lesson_id}` route above or by any `/{lesson_id}/<literal>` route
+    below, regardless of declaration order."""
+    logger.info("GET /lesson/reflection/progress user_id=%s", user_id)
+    reflections = _reflection_generation_service.get_progress(user_id)
+    return ReflectionProgressResponse(reflections=[_reflection_response(r) for r in reflections])

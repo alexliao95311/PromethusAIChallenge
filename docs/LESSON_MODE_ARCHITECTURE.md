@@ -1042,3 +1042,68 @@ and `LessonSubPages.test.jsx`.
 - Increment 9's dynamic debate persona endpoints are unauthenticated (no
   per-user state is written), unlike Increment 7/8's persona/impact
   endpoints which require auth.
+
+## Increment 10: post-debate reflection and feedback
+
+After a Lesson Mode debate, `POST /lesson/{lesson_id}/reflection` accepts
+the transcript, the student's own self-reported `view_changed`
+(`yes`/`somewhat`/`no`/`less_certain`) and an optional `explanation`, and
+returns a grounded educational analysis of the same transcript --
+`strongest_student_argument`, `weakest_reasoning_step`,
+`evidence_use_feedback`, `missed_opponent_point`,
+`perspective_understanding` (each with an optional verbatim
+`transcript_excerpt`), plus `recommended_skill` and
+`recommended_next_activity`. `GET /lesson/reflection/progress` returns every
+reflection the authenticated user has submitted across every lesson debate,
+oldest first -- a 2-segment literal path that can't be shadowed by the
+1-segment `/{lesson_id}` route regardless of declaration order.
+
+Key design decisions, in `services/reflection_generation.py`:
+
+- **A separate rubric from winner-determination.** `chains/judge_chain.py`'s
+  `OpenRouterChat` model class is reused for the underlying LLM call (the
+  same class the existing debate judge uses), but with an entirely new
+  system prompt (`EDUCATIONAL_JUDGE_SYSTEM_PROMPT`) that never declares a
+  winner and never weighs which side had the stronger case -- it evaluates
+  only the student's individual growth.
+- **`view_changed` is never inferred.** It is always the student's own
+  self-report from the request body; the model is never asked for it, isn't
+  shown it, and can't override it -- verified by
+  `test_submit_reflection_never_infers_view_changed_from_model` and by the
+  model's JSON schema simply having no such field.
+- **Transcript-grounded feedback.** Every `transcript_excerpt` the model
+  returns is verified as an actual (whitespace-normalized) substring of the
+  real transcript (`_verify_excerpt`); an excerpt that doesn't verify is
+  dropped to `None` while the feedback text itself is kept -- one
+  fabricated quote doesn't discard an otherwise-useful piece of feedback,
+  mirroring how `persona_impact_generation.py` trims invalid `section_ids`
+  rather than failing the whole response.
+- **Reflections are per-user state requiring auth**, unlike Increment 9's
+  debate-persona endpoints. `LessonRepository.list_debate_reflections`
+  queries Firestore with a `where("user_id", "==", ...)` equality filter --
+  the first Lesson Mode query that isn't a get-by-id lookup, so
+  `tests/fake_firestore.py`'s `FakeFirestoreClient` gained a minimal
+  `FakeQuery` supporting chained equality `where(...).stream()`.
+
+Frontend: `LessonReflection.jsx` (a self-contained page component, not a
+thin wrapper -- there is no pre-existing component to wrap, same as
+Increment 9's `LessonDebatePersona.jsx`) takes a pasted transcript,
+collects `view_changed` + optional explanation, and renders the five
+feedback cards with their excerpts as blockquotes when present.
+`LessonReflectionPage.jsx` adds the back-link and `LessonModeNav` (now with
+a seventh "Reflection" tab) at `/lesson/:lessonId/reflection`.
+`LessonReflectionProgress.jsx` is a separate, non-lesson-scoped page at
+`/lesson/reflection-progress` listing every reflection across every
+lesson. As with Increment 9, this does not auto-capture a live debate
+transcript from `Debate.jsx` -- the student pastes it in, since Lesson Mode
+debates still don't flow through a dedicated in-app debate view.
+
+`tests/test_reflection_generation.py` covers excerpt verification (accepts
+a verbatim substring, rejects a fabricated quote, keeps feedback text even
+when its excerpt is dropped), empty-transcript rejection, the retry-on-bad-
+JSON path, persistence, and cross-lesson/cross-user progress ordering.
+`tests/test_reflection_routes.py` covers auth requirements on both
+endpoints, the unknown-lesson 404, invalid `view_changed` returning 422,
+grounded feedback in the response shape, that no winner/loser field ever
+leaks into the response, and that progress is correctly scoped per user
+and spans multiple lessons.

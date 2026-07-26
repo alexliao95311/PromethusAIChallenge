@@ -26,6 +26,8 @@ import LessonQuizPage from "./components/LessonQuizPage";
 import LessonOpenResponsePage from "./components/LessonOpenResponsePage";
 import LessonPersonalImpactPage from "./components/LessonPersonalImpactPage";
 import LessonDebatePersonaPage from "./components/LessonDebatePersonaPage";
+import LessonReflectionPage from "./components/LessonReflectionPage";
+import LessonReflectionProgress from "./components/LessonReflectionProgress";
 
 // Component to handle scroll reset on route changes
 function ScrollToTop() {
@@ -141,6 +143,8 @@ function App() {
         <Route path="/lesson/:lessonId/open-response" element={<LessonOpenResponsePage />} />
         <Route path="/lesson/:lessonId/personal-impact" element={<LessonPersonalImpactPage />} />
         <Route path="/lesson/:lessonId/debate-persona" element={<LessonDebatePersonaPage />} />
+        <Route path="/lesson/:lessonId/reflection" element={<LessonReflectionPage />} />
+        <Route path="/lesson/reflection-progress" element={<LessonReflectionProgress />} />
 
         {!user ? (
           <Route path="*" element={<Login onLogin={setUser} />} />

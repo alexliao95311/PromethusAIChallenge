@@ -33,12 +33,32 @@ class FakeDocumentRef:
         self._store.pop(self._doc_id, None)
 
 
+class FakeQuery:
+    """Minimal fake of a Firestore query -- supports only equality `where`
+    filters, chained, followed by `.stream()`. That's the only query shape
+    LessonRepository.list_debate_reflections needs."""
+
+    def __init__(self, docs):
+        self._docs = docs
+
+    def where(self, field, op, value):
+        if op != "==":
+            raise NotImplementedError("FakeQuery only supports '==' filters")
+        return FakeQuery([d for d in self._docs if d.get(field) == value])
+
+    def stream(self):
+        return [FakeDocumentSnapshot(d) for d in self._docs]
+
+
 class FakeCollectionRef:
     def __init__(self, collection_store):
         self._store = collection_store
 
     def document(self, doc_id):
         return FakeDocumentRef(self._store, doc_id)
+
+    def where(self, field, op, value):
+        return FakeQuery(list(self._store.values())).where(field, op, value)
 
 
 class FakeFirestoreClient:

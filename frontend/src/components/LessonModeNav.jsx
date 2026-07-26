@@ -9,12 +9,13 @@ const TABS = [
   { key: 'open-response', label: 'Open Response', suffix: '/open-response' },
   { key: 'personal-impact', label: 'Personal Impact', suffix: '/personal-impact' },
   { key: 'debate-persona', label: 'Debate Opponent', suffix: '/debate-persona' },
+  { key: 'reflection', label: 'Reflection', suffix: '/reflection' },
 ];
 
 // A consistent tab bar shown at the top of every Lesson Mode sub-page, so
-// the six backend services (lesson, vocabulary, quiz, open-response,
-// personal-impact, dynamic debate persona) read as one visually cohesive
-// experience rather than disconnected pages.
+// the seven backend services (lesson, vocabulary, quiz, open-response,
+// personal-impact, dynamic debate persona, post-debate reflection) read as
+// one visually cohesive experience rather than disconnected pages.
 function LessonModeNav({ lessonId }) {
   const location = useLocation();
   const basePath = `/lesson/${lessonId}`;
