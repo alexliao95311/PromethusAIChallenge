@@ -328,3 +328,11 @@ export const getReflectionProgress = async () => {
   const response = await apiClient.get('/lesson/reflection/progress', { headers });
   return response.data;
 };
+
+// --- Lesson Mode: mastery dashboard (Increment 11) ---
+// Auth required -- entirely the authenticated user's own progress, read-only.
+export const getMasteryDashboard = async () => {
+  const headers = await getAuthHeaders();
+  const response = await apiClient.get('/lesson/mastery-dashboard', { headers });
+  return response.data;
+};

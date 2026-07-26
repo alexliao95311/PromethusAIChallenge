@@ -51,6 +51,7 @@ from services.persona_impact_generation import (
     PersonaImpactGenerationError,
     PersonaImpactGenerationService,
 )
+from services.mastery_dashboard import MasteryDashboard, MasteryDashboardService
 from services.persona_service import PersonaService, PersonaValidationError
 from services.quiz_generation import QuizGenerationError, QuizGenerationService
 from services.rag.retrieval_service import BillNotCachedError, BillRagService, RetrievedSection
@@ -82,6 +83,7 @@ _dynamic_persona_generation_service = DynamicPersonaGenerationService(
 _reflection_generation_service = ReflectionGenerationService(
     repository=_lesson_generation_service.repository
 )
+_mastery_dashboard_service = MasteryDashboardService(repository=_lesson_generation_service.repository)
 
 
 class RetrieveSectionsRequest(BaseModel):
@@ -706,6 +708,26 @@ async def personal_impact(
     )
 
 
+# ---------------------------------------------------------------------------
+# Mastery dashboard (Increment 11)
+#
+# A read-only aggregation over data every other Lesson Mode endpoint already
+# persists -- nothing here is generated or written. Auth required, since
+# it's entirely the authenticated user's own progress. `mastery-dashboard`
+# is a single path segment (a hyphen, not a `/`), so it is the SAME shape as
+# `{lesson_id}` below and MUST be declared first, exactly like `/persona` /
+# `/personal-impact` above -- otherwise a request to `/lesson/mastery-dashboard`
+# would incorrectly match `GET /{lesson_id}` with lesson_id="mastery-dashboard"
+# (this is not hypothetical: it's exactly the bug the Increment 1 GET
+# /{lesson_id} route itself was originally added with and had to be fixed).
+# ---------------------------------------------------------------------------
+
+@router.get("/mastery-dashboard", response_model=MasteryDashboard)
+async def get_mastery_dashboard(user_id: str = Depends(get_current_user_id)):
+    logger.info("GET /lesson/mastery-dashboard user_id=%s", user_id)
+    return _mastery_dashboard_service.get_dashboard(user_id)
+
+
 @router.get("/{lesson_id}", response_model=Lesson)
 async def get_lesson(lesson_id: str):
     """Re-fetch an already-generated lesson by id.
@@ -714,11 +736,11 @@ async def get_lesson(lesson_id: str):
     `/lesson/generate` (which itself is idempotent per bill text, but still
     requires the caller to have the full bill_text on hand). Declared after
     every single-segment literal-path route above (`/generate`,
-    `/retrieve-sections`, `/persona`, `/persona/options`, `/personal-impact`)
-    -- FastAPI matches routes in declaration order, so those literal paths
-    must come first or a request to e.g. `/lesson/persona` would incorrectly
-    match this `{lesson_id}` route with `lesson_id="persona"`. Routes with
-    additional path segments (`/{lesson_id}/quiz`, `/{lesson_id}/review/...`,
+    `/retrieve-sections`, `/persona`, `/persona/options`, `/personal-impact`,
+    `/mastery-dashboard`) -- FastAPI matches routes in declaration order, so
+    those literal paths must come first or a request to e.g. `/lesson/persona`
+    would incorrectly match this `{lesson_id}` route with `lesson_id="persona"`.
+    Routes with additional path segments (`/{lesson_id}/quiz`, `/{lesson_id}/review/...`,
     the debate-persona routes below, etc.) are a different, more specific
     template and are never shadowed by this one regardless of order.
     """

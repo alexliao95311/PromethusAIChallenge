@@ -106,6 +106,10 @@ function LessonHub() {
           Want a personalized impact narrative later? <Link to="/lesson/persona">Build a persona</Link>{' '}
           (optional, and can be fictional).
         </p>
+        <p className="lesson-hub-persona-note">
+          <Link to="/lesson/mastery-dashboard">View your mastery dashboard</Link> to track progress
+          across every lesson.
+        </p>
       </div>
     </div>
   );

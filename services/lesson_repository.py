@@ -149,6 +149,14 @@ class LessonRepository:
             return None
         return QuizAttempt.from_firestore_dict(doc.to_dict())
 
+    def list_quiz_attempts(self, user_id: str) -> list:
+        """Every quiz attempt a user has made, across every lesson, oldest
+        first -- powers the Increment 11 mastery dashboard."""
+        docs = self.db.collection(COLLECTION_QUIZ_ATTEMPTS).where("user_id", "==", user_id).stream()
+        attempts = [QuizAttempt.from_firestore_dict(doc.to_dict()) for doc in docs]
+        attempts.sort(key=lambda a: a.created_at)
+        return attempts
+
     # -- OpenResponseQuestion --------------------------------------------
     def create_open_response_question(self, question: OpenResponseQuestion) -> str:
         self.db.collection(COLLECTION_OPEN_RESPONSE_QUESTIONS).document(question.question_id).set(
@@ -174,6 +182,16 @@ class LessonRepository:
         if not doc.exists:
             return None
         return OpenResponseAttempt.from_firestore_dict(doc.to_dict())
+
+    def list_open_response_attempts(self, user_id: str) -> list:
+        """Every open-response attempt a user has made, across every lesson,
+        oldest first -- powers the Increment 11 mastery dashboard."""
+        docs = self.db.collection(COLLECTION_OPEN_RESPONSE_ATTEMPTS).where(
+            "user_id", "==", user_id
+        ).stream()
+        attempts = [OpenResponseAttempt.from_firestore_dict(doc.to_dict()) for doc in docs]
+        attempts.sort(key=lambda a: a.created_at)
+        return attempts
 
     # -- DynamicPersona --------------------------------------------------
     def create_dynamic_persona(self, persona: DynamicPersona) -> str:
@@ -260,3 +278,16 @@ class LessonRepository:
         if not doc.exists:
             return None
         return LessonProgress.from_firestore_dict(doc.to_dict())
+
+    def list_lesson_progress_for_user(self, user_id: str) -> list:
+        """Every lesson a user has at least started a flashcard-review
+        session on, across every lesson -- one of several signals the
+        Increment 11 mastery dashboard uses to discover which lessons a
+        user has touched (alongside quiz/open-response/reflection
+        activity)."""
+        docs = self.db.collection(COLLECTION_LESSON_PROGRESS).where(
+            "user_id", "==", user_id
+        ).stream()
+        progress = [LessonProgress.from_firestore_dict(doc.to_dict()) for doc in docs]
+        progress.sort(key=lambda p: p.lesson_id)
+        return progress
