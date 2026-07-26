@@ -163,6 +163,31 @@ async function getAuthHeaders() {
   return { Authorization: `Bearer ${token}` };
 }
 
+// --- Lesson Mode: lesson generation ---
+// No auth required -- a generated lesson is reusable content (like a quiz
+// question), not per-user state. Generation is idempotent per bill_id +
+// bill_text, so calling this again for the same bill reuses the cached
+// lesson instead of re-generating.
+export const generateLesson = async (billId, billText, options = {}) => {
+  const body = {
+    bill_id: billId,
+    bill_text: billText,
+    include_vocabulary: options.includeVocabulary ?? false,
+    include_quiz: options.includeQuiz ?? false,
+    include_open_response: options.includeOpenResponse ?? false,
+  };
+  if (options.model) body.model = options.model;
+  const response = await apiClient.post('/lesson/generate', body);
+  return response.data;
+};
+
+// Re-fetch an already-generated lesson by id (e.g. on page refresh/direct
+// link), without needing the bill_text again.
+export const getLesson = async (lessonId) => {
+  const response = await apiClient.get(`/lesson/${lessonId}`);
+  return response.data;
+};
+
 export const startReviewSession = async (lessonId) => {
   const headers = await getAuthHeaders();
   const response = await apiClient.post(`/lesson/${lessonId}/review/start-session`, {}, { headers });
@@ -258,5 +283,26 @@ export const getPersonalImpact = async (lessonId, { billText, persona, model } =
   if (persona) body.persona = persona;
   if (model) body.model = model;
   const response = await apiClient.post('/lesson/personal-impact', body, { headers });
+  return response.data;
+};
+
+// --- Lesson Mode: dynamic opposing debate persona ---
+// No auth required -- a generated persona is lesson-scoped, reusable
+// content, not per-user state. studentPersona (inline, optional) is the
+// same broad occupation/state/age_range/income_bracket shape as the saved
+// persona; omitting it is the "persona skipped" path.
+export const generateDebatePersona = async (lessonId, { studentPersona, model } = {}) => {
+  const body = {};
+  if (studentPersona) body.student_persona = studentPersona;
+  if (model) body.model = model;
+  const response = await apiClient.post(`/lesson/${lessonId}/debate-persona/generate`, body);
+  return response.data;
+};
+
+export const getSocraticHint = async (lessonId, personaId, fullTranscript = '') => {
+  const response = await apiClient.post(`/lesson/${lessonId}/debate-persona/hint`, {
+    persona_id: personaId,
+    full_transcript: fullTranscript,
+  });
   return response.data;
 };

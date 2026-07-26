@@ -1,0 +1,134 @@
+.lesson-hub-page {
+  min-height: 100vh;
+  background: #0f172a;
+  padding: 2rem 1rem 4rem;
+  color: #f8fafc;
+}
+
+.lesson-hub-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 640px;
+  margin: 0 auto 1rem;
+  color: #93c5fd;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0 1.5rem;
+}
+
+.lesson-hub-back-link:hover {
+  text-decoration: underline;
+}
+
+.lesson-hub-card {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  border-radius: 14px;
+}
+
+.lesson-hub-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: rgba(74, 144, 226, 0.15);
+  color: #93c5fd;
+  margin-bottom: 1rem;
+}
+
+.lesson-hub-title {
+  font-size: 1.6rem;
+  margin: 0 0 0.6rem 0;
+  color: #f8fafc;
+}
+
+.lesson-hub-intro {
+  color: #cbd5e1;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-bottom: 1.5rem;
+}
+
+.lesson-hub-error {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.lesson-hub-label {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin-bottom: 0.4rem;
+  margin-top: 1rem;
+}
+
+.lesson-hub-input,
+.lesson-hub-textarea {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(51, 65, 85, 0.6);
+  color: #f8fafc;
+  border-radius: 8px;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.lesson-hub-textarea {
+  resize: vertical;
+}
+
+.lesson-hub-input:focus,
+.lesson-hub-textarea:focus {
+  outline: none;
+  border-color: #4a90e2;
+}
+
+.lesson-hub-generate-btn {
+  display: block;
+  width: 100%;
+  margin-top: 1.5rem;
+  background: #4a90e2;
+  color: #f8fafc;
+  border: none;
+  border-radius: 8px;
+  padding: 0.8rem 1.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.lesson-hub-generate-btn:hover:not(:disabled) {
+  background: #3a7bc8;
+}
+
+.lesson-hub-generate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.lesson-hub-persona-note {
+  margin-top: 1.25rem;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  text-align: center;
+}
+
+.lesson-hub-persona-note a {
+  color: #93c5fd;
+}

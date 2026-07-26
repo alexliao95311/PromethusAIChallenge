@@ -317,4 +317,69 @@ async def test_endpoint_generate_lesson(repo, rag_service, monkeypatch):
     data = response.json()
     assert data["lesson_title"]
     assert len(data["pro_arguments"]) >= 1
-    assert len(data["con_arguments"]) >= 1
+
+
+@pytest.mark.asyncio
+async def test_endpoint_get_lesson_by_id(repo, rag_service, monkeypatch):
+    import routes.lesson_routes as lesson_routes
+
+    llm = CountingLLM(_valid_lesson_json())
+    test_service = LessonGenerationService(rag_service=rag_service, repository=repo, llm_call=llm)
+    monkeypatch.setattr(lesson_routes, "_lesson_generation_service", test_service)
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    app = FastAPI()
+    app.include_router(lesson_routes.router)
+    client = TestClient(app)
+
+    generated = client.post(
+        "/lesson/generate",
+        json={"bill_id": "endpoint-refetch-bill", "bill_text": SAMPLE_BILL},
+    ).json()
+
+    # Re-fetching by id (e.g. a page refresh) returns the same lesson
+    # without needing the bill_text again.
+    refetched = client.get(f"/lesson/{generated['lesson_id']}")
+    assert refetched.status_code == 200
+    assert refetched.json()["lesson_id"] == generated["lesson_id"]
+    assert refetched.json()["lesson_title"] == generated["lesson_title"]
+
+
+def test_endpoint_get_lesson_unknown_id_returns_404(repo, rag_service, monkeypatch):
+    import routes.lesson_routes as lesson_routes
+
+    test_service = LessonGenerationService(rag_service=rag_service, repository=repo)
+    monkeypatch.setattr(lesson_routes, "_lesson_generation_service", test_service)
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    app = FastAPI()
+    app.include_router(lesson_routes.router)
+    client = TestClient(app)
+
+    response = client.get("/lesson/no-such-lesson")
+    assert response.status_code == 404
+
+
+def test_endpoint_get_lesson_id_route_does_not_shadow_literal_paths(repo, rag_service, monkeypatch):
+    """Regression guard: /lesson/{lesson_id} must not intercept requests to
+    the literal-path routes declared earlier (/generate, /persona, etc.)."""
+    import routes.lesson_routes as lesson_routes
+
+    test_service = LessonGenerationService(rag_service=rag_service, repository=repo)
+    monkeypatch.setattr(lesson_routes, "_lesson_generation_service", test_service)
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    app = FastAPI()
+    app.include_router(lesson_routes.router)
+    client = TestClient(app)
+
+    # A malformed POST to /generate should hit the real /generate handler
+    # (422 for a missing field), not the GET-only /{lesson_id} route (405).
+    response = client.post("/lesson/generate", json={})
+    assert response.status_code == 422

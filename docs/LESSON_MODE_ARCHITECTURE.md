@@ -956,11 +956,53 @@ Run the frontend component tests with:
 cd frontend && npm test
 ```
 
+## Frontend page layer
+
+Every Lesson Mode backend service now has a dedicated, style-matched
+frontend page instead of one monolithic page, entered from `Legislation.jsx`
+via a third "Lesson" action-card (alongside Analyze/Debate) that extracts
+bill text the same way the existing Debate flow does and navigates to
+`/lesson` with `{billTitle, billText}` in router state.
+
+- `GET /lesson` -> `LessonHub.jsx` -- generation entry point. Prefills from
+  `location.state` when arriving from `Legislation.jsx`, otherwise accepts a
+  pasted bill title/text. Calls `generateLesson(...)` with vocabulary/quiz/
+  open-response all requested up front, caches the bill text via
+  `utils/lessonSession.js` (`sessionStorage`, keyed by `lesson_id`, used
+  because sub-pages are independently routed and need the bill text to
+  survive navigation and refresh without re-fetching it), then navigates to
+  `/lesson/:lessonId`.
+- `GET /lesson/:lessonId` -> `LessonOverview.jsx` -- fetches the lesson via
+  the new `GET /lesson/{lesson_id}` backend endpoint (added specifically to
+  support re-visiting/refreshing this page) and renders summary/objectives/
+  provisions/stakeholders/pro-con arguments with their grounding
+  `section_ids`. Hosts `LessonModeNav`, the shared tab bar linking to every
+  sub-page below.
+- `/lesson/:lessonId/vocabulary`, `/quiz`, `/open-response` -- thin wrapper
+  pages (`LessonVocabularyPage.jsx`, `LessonQuizPage.jsx`,
+  `LessonOpenResponsePage.jsx`) that add a back-link and `LessonModeNav`
+  around the pre-existing, already-tested `LessonFlashcards`/`LessonQuiz`/
+  `LessonOpenResponse` components -- no changes to those components
+  themselves.
+- `/lesson/:lessonId/personal-impact` -> `LessonPersonalImpactPage.jsx` --
+  same wrapper pattern around the existing `LessonPersonalImpact`
+  component, pulling the cached bill text back out of `lessonSession.js`.
+- `/lesson/:lessonId/debate-persona` -> `LessonDebatePersona.jsx` -- new
+  page (Increment 9 had no frontend at all). Optional collapsible
+  student-context form, `reason_for_selection` shown as a "why this
+  stakeholder" callout, a copyable `persona_prompt` box (explicitly does
+  *not* auto-navigate into `Debate.jsx` -- that wiring is still future
+  scope per the Increment 9 non-goals below), and a Socratic-hint
+  sub-section backed by the existing hint endpoint.
+
+All six pages share `LessonModeNav` for consistent cross-navigation and a
+common dark-theme CSS palette matching the rest of the app. Route-param
+threading, nav rendering, and error states are covered by
+`LessonHub.test.jsx`, `LessonOverview.test.jsx`, `LessonDebatePersona.test.jsx`,
+and `LessonSubPages.test.jsx`.
+
 ## Non-goals for this increment
 
-- No Lesson Mode *page* -- there is still no route/page in the frontend
-  that fetches a lesson and mounts `LessonFlashcards`/`LessonQuiz`/`LessonOpenResponse`;
-  they exist only as standalone, tested components awaiting that page.
 - No quiz/open-response *analytics* beyond one attempt record per
   submission (no aggregate best-score tracking wired into
   `LessonProgress.best_quiz_score` yet, no retake limits, no attempt
@@ -984,15 +1026,14 @@ cd frontend && npm test
   `app.include_router(lesson_router)`); `billsearch.py`,
   `legiscan_service.py`, `ca_propositions_service.py`, and the rest of
   `chains/` are untouched.
-- No frontend wiring for the Increment 9 dynamic persona flow yet:
-  `Legislation.jsx` doesn't call `POST /lesson/{lesson_id}/debate-persona/generate`
-  or pass a generated `persona_prompt` into `Debate.jsx`'s existing
-  `generateAIResponse(...)` call the way it already does for fixed
-  personas -- that wiring, plus a "why this stakeholder" UI and a hint
-  button for learning mode, is left for a future increment. The backend
-  contract (a `persona_prompt` string in the exact shape
-  `debater_chain.py` already parses) is what makes that wiring a small,
-  low-risk frontend-only change when it happens.
+- `LessonDebatePersona.jsx` (see "Frontend page layer" above) now calls
+  `POST /lesson/{lesson_id}/debate-persona/generate`, shows the "why this
+  stakeholder" UI, and has a hint button, but it stops at a copyable
+  `persona_prompt` box -- it still does not auto-navigate into `Debate.jsx`
+  or call `generateAIResponse(...)` directly. The backend contract (a
+  `persona_prompt` string in the exact shape `debater_chain.py` already
+  parses) is what makes that last hop a small, low-risk frontend-only
+  change when it happens.
 - No `bill_id` is currently threaded from `Legislation.jsx` into
   `Debate.jsx`'s location state -- only already-extracted `billText`/`billTitle`
   survive that navigation. Wiring the persona endpoints into the real

@@ -2190,6 +2190,91 @@ const Legislation = ({ user }) => {
     }
   };
 
+  // Extracts the selected bill's text (reusing the same per-source
+  // extraction endpoints as handleDebateExecution above, but never modifying
+  // that function) and hands off to Lesson Mode's own entry page instead of
+  // Debate Mode. Does not require a debate mode/format selection.
+  const handleLessonExecution = async () => {
+    if (!debateTopic.trim()) {
+      setError('Please enter a bill title.');
+      return;
+    }
+
+    clearInfoNote();
+
+    if (billSource === 'upload') {
+      setLoadingState(true);
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedBill);
+        setProcessingStage('Extracting text from PDF...');
+
+        const response = await fetch(`${API_URL}/extract-text`, {
+          method: "POST",
+          body: formData,
+        });
+        if (!response.ok) {
+          throw new Error('Failed to extract text');
+        }
+        const data = await response.json();
+        navigate('/lesson', {
+          state: { billTitle: selectedBill.name || debateTopic, billText: data.text },
+        });
+      } catch (err) {
+        handleError(err);
+        setLoadingState(false);
+        return;
+      }
+    } else if ((billSource === 'recommended' || billSource === 'link' || billSource === 'state' || billSource === 'proposition') && selectedBill) {
+      setLoadingState(true);
+      try {
+        setProcessingStage(
+          billSource === 'state' ? 'Extracting bill text from LegiScan...' :
+          billSource === 'proposition' ? 'Extracting proposition text from CA SOS...' :
+          'Extracting bill text from Congress.gov...'
+        );
+
+        const endpoint = billSource === 'state'
+          ? `${API_URL}/extract-state-bill-text`
+          : billSource === 'proposition'
+          ? `${API_URL}/extract-ca-proposition-text`
+          : `${API_URL}/extract-recommended-bill-text`;
+
+        const bodyData = billSource === 'state'
+          ? { bill_id: selectedBill.id }
+          : billSource === 'proposition'
+          ? { prop_id: selectedBill.id }
+          : {
+              type: selectedBill.type,
+              number: selectedBill.number,
+              congress: selectedBill.congress || 119,
+              title: selectedBill.title,
+            };
+
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(bodyData),
+        });
+        if (!response.ok) {
+          if (response.status === 404) {
+            throw new Error(t('legislation.error.noBillText'));
+          }
+          throw new Error('Failed to extract bill text');
+        }
+        const data = await response.json();
+        navigate('/lesson', { state: { billTitle: data.title, billText: data.text } });
+        setLoadingState(false);
+      } catch (err) {
+        handleError(err);
+        setLoadingState(false);
+        return;
+      }
+    } else {
+      navigate('/lesson', { state: { billTitle: debateTopic, billText: '' } });
+    }
+  };
+
   // Helper function to handle errors and show info note for specific cases
   const handleError = (err) => {
     const errorMessage = err.message;
@@ -3345,6 +3430,15 @@ const Legislation = ({ user }) => {
                   <h3>{t('legislation.action.debate')}</h3>
                   <p>{t('legislation.action.debateDescription')}</p>
                 </div>
+
+                <div
+                  className={`action-card ${actionType === 'lesson' ? 'selected' : ''}`}
+                  onClick={() => handleActionSelection('lesson')}
+                >
+                  <div className="action-icon">📘</div>
+                  <h3>Lesson</h3>
+                  <p>Turn this bill into a guided lesson: summary, vocabulary, quiz, and a debate opponent.</p>
+                </div>
               </div>
 
               <div className="step-navigation">
@@ -3387,7 +3481,14 @@ const Legislation = ({ user }) => {
               </div>
 
               <div className="action-display">
-                <h3>{t('legislation.ui.action')}: {actionType === 'analyze' ? t('legislation.action.analyze') : t('legislation.action.debate')}</h3>
+                <h3>
+                  {t('legislation.ui.action')}:{' '}
+                  {actionType === 'analyze'
+                    ? t('legislation.action.analyze')
+                    : actionType === 'lesson'
+                    ? 'Lesson'
+                    : t('legislation.action.debate')}
+                </h3>
               </div>
 
               {actionType === 'analyze' && (
@@ -3844,12 +3945,43 @@ const Legislation = ({ user }) => {
                     <button className="nav-button back" onClick={() => goToStep(2)}>
                       {t('legislation.back')}
                     </button>
-                    <button 
+                    <button
                       className="nav-button next"
                       onClick={handleDebateExecution}
                       disabled={!isDebateConfigComplete()}
                     >
                       Start Debate
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {actionType === 'lesson' && (
+                <div className="debate-config">
+                  <h2>Start a Lesson</h2>
+                  <div className="config-section">
+                    <div className="debate-topic-section">
+                      <label className="debate-label">Bill title</label>
+                      <input
+                        type="text"
+                        className="debate-topic-input"
+                        value={debateTopic}
+                        onChange={(e) => setDebateTopic(e.target.value)}
+                        placeholder="e.g. Early Childhood Educator Tax Credit Act"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="button-group">
+                    <button className="nav-button back" onClick={() => goToStep(2)}>
+                      {t('legislation.back')}
+                    </button>
+                    <button
+                      className="nav-button next"
+                      onClick={handleLessonExecution}
+                      disabled={loadingState || !debateTopic.trim()}
+                    >
+                      Start Lesson
                     </button>
                   </div>
                 </div>

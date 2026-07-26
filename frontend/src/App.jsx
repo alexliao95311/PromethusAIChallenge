@@ -19,6 +19,13 @@ import voicePreferenceService from "./services/voicePreferenceService";
 import languagePreferenceService from "./services/languagePreferenceService";
 import DebateTrainer from "./components/debatetrainer";
 import LessonPersona from "./components/LessonPersona";
+import LessonHub from "./components/LessonHub";
+import LessonOverview from "./components/LessonOverview";
+import LessonVocabularyPage from "./components/LessonVocabularyPage";
+import LessonQuizPage from "./components/LessonQuizPage";
+import LessonOpenResponsePage from "./components/LessonOpenResponsePage";
+import LessonPersonalImpactPage from "./components/LessonPersonalImpactPage";
+import LessonDebatePersonaPage from "./components/LessonDebatePersonaPage";
 
 // Component to handle scroll reset on route changes
 function ScrollToTop() {
@@ -122,7 +129,19 @@ function App() {
         {/* Public: viewing/filling out a persona needs no auth -- only
             saving/editing/deleting it does (gated inside PersonaBuilder). */}
         <Route path="/lesson/persona" element={<LessonPersona user={user} />} />
-        
+
+        {/* Lesson Mode: generation and viewing need no auth -- only
+            per-user actions (review/quiz-submit/open-response-submit/
+            personal-impact) do, gated inside each component (shows an
+            inline "sign in" message rather than blocking the page). */}
+        <Route path="/lesson" element={<LessonHub />} />
+        <Route path="/lesson/:lessonId" element={<LessonOverview />} />
+        <Route path="/lesson/:lessonId/vocabulary" element={<LessonVocabularyPage />} />
+        <Route path="/lesson/:lessonId/quiz" element={<LessonQuizPage />} />
+        <Route path="/lesson/:lessonId/open-response" element={<LessonOpenResponsePage />} />
+        <Route path="/lesson/:lessonId/personal-impact" element={<LessonPersonalImpactPage />} />
+        <Route path="/lesson/:lessonId/debate-persona" element={<LessonDebatePersonaPage />} />
+
         {!user ? (
           <Route path="*" element={<Login onLogin={setUser} />} />
         ) : (

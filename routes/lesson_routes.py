@@ -701,6 +701,26 @@ async def personal_impact(
     )
 
 
+@router.get("/{lesson_id}", response_model=Lesson)
+async def get_lesson(lesson_id: str):
+    """Re-fetch an already-generated lesson by id.
+
+    Lets a page refresh or a direct link work without re-POSTing to
+    `/lesson/generate` (which itself is idempotent per bill text, but still
+    requires the caller to have the full bill_text on hand). Declared after
+    every single-segment literal-path route above (`/generate`,
+    `/retrieve-sections`, `/persona`, `/persona/options`, `/personal-impact`)
+    -- FastAPI matches routes in declaration order, so those literal paths
+    must come first or a request to e.g. `/lesson/persona` would incorrectly
+    match this `{lesson_id}` route with `lesson_id="persona"`. Routes with
+    additional path segments (`/{lesson_id}/quiz`, `/{lesson_id}/review/...`,
+    the debate-persona routes below, etc.) are a different, more specific
+    template and are never shadowed by this one regardless of order.
+    """
+    logger.info("GET /lesson/%s", lesson_id)
+    return _get_lesson_or_404(lesson_id)
+
+
 # ---------------------------------------------------------------------------
 # Dynamic opposing debate persona (Increment 9)
 #
