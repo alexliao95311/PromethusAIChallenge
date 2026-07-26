@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { getOpenResponseQuestion, submitOpenResponseAnswer } from '../api';
+import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
+import { markFlowStepComplete } from '../utils/lessonFlow';
 import './LessonOpenResponse.css';
 
 const SCORE_LABELS = {
@@ -43,8 +45,11 @@ function LessonOpenResponse({ lessonId }) {
     try {
       const data = await submitOpenResponseAnswer(lessonId, answer);
       setResult(data);
+      markFlowStepComplete(lessonId, 'open-response');
+      trackEvent(FLOW_EVENTS.OPEN_RESPONSE_COMPLETED, { lessonId, success: true });
     } catch (err) {
       setError(err?.response?.data?.detail || err.message || 'Failed to submit your answer.');
+      trackEvent(FLOW_EVENTS.OPEN_RESPONSE_COMPLETED, { lessonId, success: false });
     } finally {
       setSubmitting(false);
     }

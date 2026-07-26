@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 
 import LessonDebatePersona from './LessonDebatePersona';
 import { generateDebatePersona, getPersonaOptions, getSocraticHint } from '../api';
@@ -10,6 +11,14 @@ vi.mock('../api', () => ({
   getPersonaOptions: vi.fn(),
   getSocraticHint: vi.fn(),
 }));
+
+function renderComponent() {
+  return render(
+    <MemoryRouter>
+      <LessonDebatePersona lessonId="lesson-1" />
+    </MemoryRouter>
+  );
+}
 
 const PERSONA = {
   persona_id: 'lesson-1-persona-skipped',
@@ -31,7 +40,7 @@ beforeEach(() => {
 describe('LessonDebatePersona', () => {
   it('generates and displays the opposing persona', async () => {
     generateDebatePersona.mockResolvedValue(PERSONA);
-    render(<LessonDebatePersona lessonId="lesson-1" />);
+    renderComponent();
 
     fireEvent.click(screen.getByTestId('debate-persona-generate'));
 
@@ -43,7 +52,7 @@ describe('LessonDebatePersona', () => {
 
   it('shows the reason the stakeholder was selected', async () => {
     generateDebatePersona.mockResolvedValue(PERSONA);
-    render(<LessonDebatePersona lessonId="lesson-1" />);
+    renderComponent();
     fireEvent.click(screen.getByTestId('debate-persona-generate'));
 
     expect(await screen.findByTestId('debate-persona-reason')).toHaveTextContent(
@@ -54,7 +63,7 @@ describe('LessonDebatePersona', () => {
   it('sends optional student context when the form is filled in', async () => {
     getPersonaOptions.mockResolvedValue({ states: [], age_ranges: [] });
     generateDebatePersona.mockResolvedValue(PERSONA);
-    render(<LessonDebatePersona lessonId="lesson-1" />);
+    renderComponent();
 
     fireEvent.click(screen.getByTestId('debate-persona-toggle-context'));
     await screen.findByTestId('debate-persona-context-form');
@@ -73,7 +82,7 @@ describe('LessonDebatePersona', () => {
 
   it('shows the persona_prompt for copying into Debate Mode', async () => {
     generateDebatePersona.mockResolvedValue(PERSONA);
-    render(<LessonDebatePersona lessonId="lesson-1" />);
+    renderComponent();
     fireEvent.click(screen.getByTestId('debate-persona-generate'));
 
     expect(await screen.findByTestId('debate-persona-prompt')).toHaveTextContent('PERSONA INSTRUCTIONS:');
@@ -87,7 +96,7 @@ describe('LessonDebatePersona', () => {
   it('requests and displays a Socratic hint', async () => {
     generateDebatePersona.mockResolvedValue(PERSONA);
     getSocraticHint.mockResolvedValue({ hint: 'What assumption is your argument relying on?' });
-    render(<LessonDebatePersona lessonId="lesson-1" />);
+    renderComponent();
 
     fireEvent.click(screen.getByTestId('debate-persona-generate'));
     await screen.findByTestId('debate-persona-role');
@@ -111,7 +120,7 @@ describe('LessonDebatePersona', () => {
 
   it('allows generating a different opponent', async () => {
     generateDebatePersona.mockResolvedValue(PERSONA);
-    render(<LessonDebatePersona lessonId="lesson-1" />);
+    renderComponent();
     fireEvent.click(screen.getByTestId('debate-persona-generate'));
     await screen.findByTestId('debate-persona-role');
 
@@ -121,9 +130,44 @@ describe('LessonDebatePersona', () => {
 
   it('shows an error message when generation fails', async () => {
     generateDebatePersona.mockRejectedValue(new Error('generation failed'));
-    render(<LessonDebatePersona lessonId="lesson-1" />);
+    renderComponent();
     fireEvent.click(screen.getByTestId('debate-persona-generate'));
 
     expect(await screen.findByText('generation failed')).toBeInTheDocument();
+  });
+
+  it('offers a Start Debate button that launches Debate.jsx with the persona prompt', async () => {
+    generateDebatePersona.mockResolvedValue(PERSONA);
+    renderComponent();
+    fireEvent.click(screen.getByTestId('debate-persona-generate'));
+
+    expect(await screen.findByTestId('debate-persona-start-debate')).toBeInTheDocument();
+  });
+
+  it('navigates to /debate with the persona_prompt and lesson_id in router state', async () => {
+    generateDebatePersona.mockResolvedValue(PERSONA);
+
+    function LocationProbe() {
+      const location = useLocation();
+      return <div data-testid="location-state">{JSON.stringify(location.state)}</div>;
+    }
+
+    render(
+      <MemoryRouter initialEntries={['/lesson/lesson-1/debate-persona']}>
+        <Routes>
+          <Route path="/lesson/:lessonId/debate-persona" element={<LessonDebatePersona lessonId="lesson-1" />} />
+          <Route path="/debate" element={<LocationProbe />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(screen.getByTestId('debate-persona-generate'));
+    await screen.findByTestId('debate-persona-start-debate');
+    fireEvent.click(screen.getByTestId('debate-persona-start-debate'));
+
+    const state = JSON.parse(await screen.findByTestId('location-state').then((el) => el.textContent));
+    expect(state.lessonId).toBe('lesson-1');
+    expect(state.lessonPersonaPrompt).toBe(PERSONA.persona_prompt);
+    expect(state.debateMode).toBe('ai-vs-user');
   });
 });

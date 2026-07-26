@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, Sparkles } from 'lucide-react';
 import { getReviewState, startReviewSession, submitReviewAnswer } from '../api';
+import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
+import { markFlowStepComplete } from '../utils/lessonFlow';
 import './LessonFlashcards.css';
 
 const BOX_LABELS = { 1: 'Needs review', 2: 'Learning', 3: 'Mastered' };
@@ -48,6 +50,8 @@ function LessonFlashcards({ lessonId }) {
     setError('');
     try {
       await submitReviewAnswer(lessonId, card.card_id, correct);
+      markFlowStepComplete(lessonId, 'vocabulary');
+      trackEvent(FLOW_EVENTS.VOCABULARY_REVIEWED, { lessonId, success: true });
 
       setReviewState((prev) => {
         if (!prev) return prev;

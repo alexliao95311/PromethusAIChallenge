@@ -1,8 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { getLesson } from '../api';
 import LessonModeNav from './LessonModeNav';
+import LessonFlowProgress from './LessonFlowProgress';
+import LessonFlowNextButton from './LessonFlowNextButton';
+import { markFlowStepComplete } from '../utils/lessonFlow';
+import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
 import './LessonOverview.css';
 
 function GroundedClaimList({ items, testId }) {
@@ -36,8 +40,11 @@ function LessonOverview() {
     try {
       const data = await getLesson(lessonId);
       setLesson(data);
+      markFlowStepComplete(lessonId, 'lesson');
+      trackEvent(FLOW_EVENTS.LESSON_VIEWED, { lessonId, success: true });
     } catch (err) {
       setError(err?.response?.data?.detail || err.message || 'Failed to load the lesson.');
+      trackEvent(FLOW_EVENTS.LESSON_VIEWED, { lessonId, success: false });
     } finally {
       setLoading(false);
     }
@@ -58,7 +65,16 @@ function LessonOverview() {
           <ArrowLeft size={18} />
           <span>Back to Lesson Mode</span>
         </Link>
-        <div className="lesson-overview-error">{error}</div>
+        <div className="lesson-overview-error" role="alert">{error}</div>
+        <button
+          type="button"
+          className="lesson-overview-retry-btn"
+          onClick={load}
+          data-testid="lesson-overview-retry"
+        >
+          <RefreshCw size={16} />
+          <span>Retry</span>
+        </button>
       </div>
     );
   }
@@ -72,6 +88,7 @@ function LessonOverview() {
         <span>Back to Lesson Mode</span>
       </Link>
 
+      <LessonFlowProgress lessonId={lessonId} currentStepKey="lesson" />
       <LessonModeNav lessonId={lessonId} />
 
       <div className="lesson-overview-card">
@@ -111,6 +128,8 @@ function LessonOverview() {
             <GroundedClaimList items={lesson.con_arguments} testId="lesson-overview-con" />
           </div>
         </div>
+
+        <LessonFlowNextButton lessonId={lessonId} currentStepKey="lesson" />
       </div>
     </div>
   );

@@ -29,6 +29,21 @@
   text-align: center;
 }
 
+.lesson-overview-retry-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 auto;
+  background: rgba(74, 144, 226, 0.15);
+  border: 1px solid rgba(74, 144, 226, 0.4);
+  color: #93c5fd;
+  border-radius: 8px;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .lesson-overview-card {
   max-width: 900px;
   margin: 0 auto;

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MessageCircleQuestion, Sparkles } from 'lucide-react';
 import { generateDebatePersona, getPersonaOptions, getSocraticHint } from '../api';
+import { getLessonBillText } from '../utils/lessonSession';
+import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
 import './LessonDebatePersona.css';
 
 const EMPTY_CONTEXT = { occupation: '', state: '', age_range: '', income_bracket: '' };
@@ -8,12 +11,15 @@ const EMPTY_CONTEXT = { occupation: '', state: '', age_range: '', income_bracket
 // Dynamic opposing debate persona service page (Increment 9): generates a
 // bill-grounded stakeholder with a meaningfully different perspective to
 // use as an AI debate opponent, and an optional Socratic hint for learning
-// mode. This is intentionally self-contained rather than auto-launching a
-// live debate -- Debate.jsx doesn't yet accept a persona_prompt from
-// Lesson Mode (see docs/LESSON_MODE_ARCHITECTURE.md Non-goals), so the
-// generated prompt is surfaced for the student/teacher to copy into Debate
-// Mode's persona field today.
+// mode. The generated persona_prompt is still surfaced for copy/paste, but
+// (Increment 12) "Start Debate" now also launches straight into Debate.jsx
+// with that prompt and this lesson_id pre-filled via router state --
+// Debate.jsx uses it in place of its fixed trump/harris/musk/drake personas
+// for the single-AI-opponent ("ai-vs-user") mode, and its "End Debate"
+// action returns here into the Increment 10 reflection page instead of the
+// generic judge page.
 function LessonDebatePersona({ lessonId }) {
+  const navigate = useNavigate();
   const [showContextForm, setShowContextForm] = useState(false);
   const [context, setContext] = useState(EMPTY_CONTEXT);
   const [options, setOptions] = useState(null);
@@ -77,6 +83,25 @@ function LessonDebatePersona({ lessonId }) {
     } catch {
       // Clipboard API unavailable -- the text is still visible to select manually.
     }
+  };
+
+  const handleStartDebate = () => {
+    if (!persona) return;
+    const { billText, billTitle } = getLessonBillText(lessonId);
+    trackEvent(FLOW_EVENTS.DEBATE_STARTED, { lessonId });
+    navigate('/debate', {
+      state: {
+        mode: 'bill-debate',
+        debateMode: 'ai-vs-user',
+        topic: billTitle || 'This bill',
+        billText,
+        billTitle,
+        debateFormat: 'default',
+        aiPersona: 'default',
+        lessonPersonaPrompt: persona.persona_prompt,
+        lessonId,
+      },
+    });
   };
 
   const handleGetHint = async () => {
@@ -212,9 +237,18 @@ function LessonDebatePersona({ lessonId }) {
               {persona.persona_prompt}
             </pre>
             <p className="debate-persona-prompt-help">
-              Paste this into Debate Mode's persona field to debate against this stakeholder.
+              Start the debate below, or copy this to paste into Debate Mode manually.
             </p>
           </div>
+
+          <button
+            type="button"
+            className="debate-persona-generate-btn"
+            onClick={handleStartDebate}
+            data-testid="debate-persona-start-debate"
+          >
+            Start Debate with This Opponent
+          </button>
 
           <div className="debate-persona-hint-box">
             <h3 className="debate-persona-hint-heading">

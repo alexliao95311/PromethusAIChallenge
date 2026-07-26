@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 import MasteryDashboard from './MasteryDashboard';
@@ -185,5 +185,17 @@ describe('MasteryDashboard', () => {
     await screen.findByTestId('mastery-dashboard');
     expect(screen.getByTestId('mastery-recent-quiz')).toHaveTextContent('90');
     expect(screen.getByTestId('mastery-recent-open-response')).toHaveTextContent('3 / 3');
+  });
+
+  it('lets the student retry after a failed load', async () => {
+    getMasteryDashboard.mockRejectedValueOnce(new Error('network error'));
+    renderDashboard();
+    await screen.findByTestId('mastery-dashboard-retry');
+
+    getMasteryDashboard.mockResolvedValueOnce(EMPTY_DASHBOARD);
+    fireEvent.click(screen.getByTestId('mastery-dashboard-retry'));
+
+    expect(await screen.findByTestId('mastery-empty-state')).toBeInTheDocument();
+    expect(getMasteryDashboard).toHaveBeenCalledTimes(2);
   });
 });

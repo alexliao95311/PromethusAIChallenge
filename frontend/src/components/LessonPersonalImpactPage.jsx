@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import LessonPersonalImpact from './LessonPersonalImpact';
 import LessonModeNav from './LessonModeNav';
+import LessonFlowProgress from './LessonFlowProgress';
+import LessonFlowNextButton from './LessonFlowNextButton';
 import { getLessonBillText } from '../utils/lessonSession';
 import './LessonSubPage.css';
 
@@ -20,8 +22,10 @@ function LessonPersonalImpactPage() {
         <ArrowLeft size={18} />
         <span>Back to Lesson</span>
       </Link>
+      <LessonFlowProgress lessonId={lessonId} currentStepKey="personal-impact" />
       <LessonModeNav lessonId={lessonId} />
       <LessonPersonalImpact lessonId={lessonId} billText={billText} />
+      <LessonFlowNextButton lessonId={lessonId} currentStepKey="personal-impact" />
     </div>
   );
 }

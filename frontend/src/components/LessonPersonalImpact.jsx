@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { getPersonalImpact } from '../api';
+import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
+import { markFlowStepComplete } from '../utils/lessonFlow';
 import './LessonPersonalImpact.css';
 
 const CONFIDENCE_LABELS = {
@@ -48,8 +50,11 @@ function LessonPersonalImpact({ lessonId, billText, persona }) {
     try {
       const data = await getPersonalImpact(lessonId, { billText, persona });
       setResult(data);
+      markFlowStepComplete(lessonId, 'personal-impact');
+      trackEvent(FLOW_EVENTS.IMPACT_GENERATED, { lessonId, success: true });
     } catch (err) {
       setError(err?.response?.data?.detail || err.message || 'Failed to generate your personal impact.');
+      trackEvent(FLOW_EVENTS.IMPACT_GENERATED, { lessonId, success: false });
     } finally {
       setLoading(false);
     }

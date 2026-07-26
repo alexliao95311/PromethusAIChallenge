@@ -1,0 +1,17 @@
+.lesson-flow-next-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #4a90e2;
+  color: #f8fafc;
+  border-radius: 8px;
+  padding: 0.65rem 1.4rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  text-decoration: none;
+  margin-top: 1.5rem;
+}
+
+.lesson-flow-next-btn:hover {
+  background: #3a7bc8;
+}

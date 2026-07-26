@@ -3,6 +3,8 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import LessonOpenResponse from './LessonOpenResponse';
 import LessonModeNav from './LessonModeNav';
+import LessonFlowProgress from './LessonFlowProgress';
+import LessonFlowNextButton from './LessonFlowNextButton';
 import './LessonSubPage.css';
 
 // Open-response service page: hosts the open-ended question + AI grading component.
@@ -15,8 +17,10 @@ function LessonOpenResponsePage() {
         <ArrowLeft size={18} />
         <span>Back to Lesson</span>
       </Link>
+      <LessonFlowProgress lessonId={lessonId} currentStepKey="open-response" />
       <LessonModeNav lessonId={lessonId} />
       <LessonOpenResponse lessonId={lessonId} />
+      <LessonFlowNextButton lessonId={lessonId} currentStepKey="open-response" />
     </div>
   );
 }

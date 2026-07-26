@@ -1194,3 +1194,146 @@ covers the auth requirement and the empty/populated response shapes over
 HTTP. `frontend/src/components/MasteryDashboard.test.jsx` covers loading,
 error, empty, and populated states, the prominent recommendation, mastery
 bars, per-bill completion badges, the AI-estimate label, and recent scores.
+
+## Increment 12: end-to-end Lesson Mode
+
+Connects every previous increment into one guided workflow: bill -> persona
+(optional) -> personalized impact (optional) -> lesson -> vocabulary ->
+quiz -> open response -> debate -> reflection -> mastery dashboard. Almost
+entirely additive wiring across already-shipped pieces, plus one real
+architectural change that had been an explicit non-goal since Increment 9:
+**Debate.jsx now actually accepts a Lesson Mode persona and hands its
+transcript back to Increment 10's reflection page.**
+
+### Debate.jsx <-> Lesson Mode wiring
+
+`LessonDebatePersona.jsx`'s "Start Debate with This Opponent" button
+(`handleStartDebate`) navigates to `/debate` with `location.state` shaped
+like every other Debate.jsx entry point (`mode: 'bill-debate'`,
+`debateMode: 'ai-vs-user'`, `topic`, `billText`/`billTitle` pulled back out
+of `lessonSession.js`) plus two new fields no existing caller ever sets:
+`lessonId` and `lessonPersonaPrompt` (the generated `persona_prompt`
+string).
+
+In `Debate.jsx`:
+- `getPersonaPrompt(persona, lessonPersonaPrompt)` gained an optional
+  second parameter: when present, it's returned verbatim (wrapped in a
+  "STAKEHOLDER PERSONA INSTRUCTIONS:" header) *instead of* the fixed
+  trump/harris/musk/drake lookup. Every existing call site in AI-vs-AI mode
+  (`proPersona`/`conPersona`) is untouched; only the single-AI-opponent
+  ("ai-vs-user") call sites (`aiPersona`/`currentPersona`) were updated to
+  pass `lessonPersonaPrompt` through -- since every existing caller omits
+  that argument, this changes zero existing behavior.
+- `handleEndDebate` now checks for `lessonId`: if present, it navigates to
+  `/lesson/{lessonId}/reflection` with `{state: {transcript}}` instead of
+  the generic `/judge` page. Every other debate (no `lessonId`) is
+  unaffected.
+- `LessonReflection.jsx` reads `useLocation().state?.transcript` to prefill
+  the transcript textarea when arriving this way, falling back to empty
+  (the pre-Increment-12 behavior) when arriving directly, e.g. after a
+  refresh.
+
+Debate.jsx has no prior test coverage (3400+ lines, no `Debate.test.jsx`)
+and touching its ~9 `getPersonaPrompt(...)` call sites and its single
+`handleEndDebate` function was scoped to be the smallest possible additive
+diff for exactly this reason -- verified by re-running every existing
+Lesson Mode test (no regressions possible there since Debate.jsx isn't
+imported by any of them) plus a live browser check of the new navigation
+path, rather than adding broad new coverage of an already-live,
+untested file.
+
+### Flow progress + navigation (requirement: clear navigation and progress indicators)
+
+`LessonFlowProgress.jsx` is a 9-step horizontal stepper (persona ->
+personal-impact -> lesson -> vocabulary -> quiz -> open-response ->
+debate-persona -> reflection -> mastery-dashboard) shown on every Lesson
+Mode page. `LessonFlowNextButton.jsx` renders a single "Continue to X"
+button chaining each page to the next. Both read the fixed order from
+`frontend/src/utils/lessonFlow.js`.
+
+### Resume / preserve-progress (requirements: survive refresh, leave and resume)
+
+Step *data* (quiz attempts, open-response attempts, reflections, vocab
+mastery) is always backend-authoritative -- nothing new here, it's exactly
+what `MasteryDashboard` already aggregates. What Increment 12 adds is a
+lightweight **local completion flag** per lesson+step
+(`lessonFlow.js`'s `markFlowStepComplete`/`isFlowStepComplete`, backed by
+`localStorage`) for the two steps that have no cheap backend
+existence-check (persona is a global per-user profile with no per-lesson
+"did you build one" signal; personal-impact generation is idempotent but
+has no read-without-generating check). This is deliberately a UX hint, not
+a source of truth: on a different device/browser it's simply absent (never
+a false "complete"), which is the correct, honest degradation the "user
+returning on another device" failure test calls for.
+
+### Failure handling (requirements: retry, useful error states, never erase progress on one failed step)
+
+- `LessonOverview.jsx` and `MasteryDashboard.jsx` each gained a `Retry`
+  button on their load-failure state (previously the only way to retry a
+  failed initial fetch was a full page refresh).
+- Every generation-service failure (`ReflectionGenerationError`,
+  `DynamicPersonaGenerationError`, etc.) was already isolated to its own
+  route handler and never touched other collections -- Increment 12 adds
+  `tests/test_lesson_mode_e2e.py::test_debate_persona_generation_failure_leaves_existing_progress_intact`
+  and `::test_reflection_generation_failure_leaves_earlier_progress_intact`
+  as regression tests *proving* that property end-to-end (a failed debate
+  persona or reflection generation call leaves prior quiz/open-response
+  progress fully intact on the mastery dashboard), not just asserting it by
+  code inspection.
+
+### Analytics (requirement: events per stage without storing sensitive text)
+
+`POST /lesson/analytics/event` (`routes/lesson_routes.py`) is a structured
+logging hook, not a full analytics pipeline (no GA4/Mixpanel integration --
+out of scope). `AnalyticsEventRequest`'s `event_type` is a closed enum and
+every other field (`lesson_id`, `step_index`, `success`) is a bounded
+primitive -- there is no freeform string field on the model at all, so bill
+text, quiz answers, or debate transcripts can never reach it, by
+construction rather than convention. `frontend/src/utils/analytics.js`'s
+`trackEvent(...)` is fire-and-forget (never awaited, every failure mode
+caught silently) and deliberately does NOT import `api.js` -- it reads
+`import.meta.env.VITE_API_URL` directly and no-ops when absent, so it's
+safe to import unmocked in any component test, unlike `api.js` which
+throws at module load if that env var is missing. Wired into: `LessonHub`
+(bill selected / lesson viewed), `LessonOverview` (lesson viewed),
+`LessonFlashcards` (vocabulary reviewed), `LessonQuiz` (quiz completed),
+`LessonOpenResponse` (open response completed), `LessonPersonalImpact`
+(impact generated), `Debate.jsx` (debate started/ended), `LessonReflection`
+(reflection submitted), and `MasteryDashboard` (dashboard viewed).
+
+### Testing
+
+`tests/test_lesson_mode_e2e.py` is the primary end-to-end integration
+test: it seeds a lesson/quiz/open-response question directly (generation
+*correctness* is already covered by each increment's own suite; this file
+tests *connectivity*) and drives the real happy path through the mounted
+router -- lesson -> quiz submit -> open-response submit -> debate persona
+generate -> reflection submit -> mastery dashboard -- confirming the
+dashboard reflects the whole trip (`completed: true`, correct attempt
+counts, a debate-skill profile, and the `explore_new_bill` recommendation
+once everything is done). Plus the two failure-preserves-progress tests
+described above. `tests/test_analytics_routes.py` covers the whitelisted
+event schema. Frontend: `lessonFlow.test.js` and `analytics.test.js` unit-test
+the new utils; `LessonFlowProgress.test.jsx` and `LessonFlowNextButton.test.jsx`
+cover the stepper/chaining; `LessonDebatePersona.test.jsx` gained a test
+asserting the exact `location.state` shape passed to `/debate`
+(`lessonId`, `lessonPersonaPrompt`, `debateMode: 'ai-vs-user'`);
+`LessonReflection.test.jsx` gained prefill tests for both the
+Debate.jsx-handoff and direct-navigation cases; `LessonOverview.test.jsx`
+and `MasteryDashboard.test.jsx` gained retry-button tests.
+
+### Non-goals / known gaps
+
+- No true browser-driven E2E test (Playwright/Cypress) -- "end-to-end" here
+  means a full HTTP-level integration test through the FastAPI router, plus
+  manual browser verification, not an automated browser test suite. Adding
+  one is a reasonable next step but a materially different (and much
+  heavier) testing investment than anything else in this codebase today.
+- Debate.jsx itself still has no component test suite. The wiring added
+  here is deliberately minimal and additive for exactly that reason (see
+  above).
+- The demo-test "two-minute" acceptance criterion (select bill -> personal
+  impact -> one lesson question -> debate -> feedback) was verified by
+  manual click-through, not an automated timer/benchmark.
+- Analytics is a structured-logging hook, not a real analytics
+  product (no dashboard, no retention, no aggregation beyond server logs).

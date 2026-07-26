@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Sparkles, TrendingUp } from 'lucide-react';
+import { RefreshCw, Sparkles, TrendingUp } from 'lucide-react';
 import { getMasteryDashboard } from '../api';
+import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
 import './MasteryDashboard.css';
 
 const ACTIVITY_LINKS = {
@@ -41,22 +42,24 @@ function MasteryDashboard() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const data = await getMasteryDashboard();
-        if (!cancelled) setDashboard(data);
-      } catch (err) {
-        if (!cancelled) {
-          setError(err?.response?.data?.detail || err.message || 'Failed to load your dashboard.');
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await getMasteryDashboard();
+      setDashboard(data);
+      trackEvent(FLOW_EVENTS.DASHBOARD_VIEWED, { success: true });
+    } catch (err) {
+      setError(err?.response?.data?.detail || err.message || 'Failed to load your dashboard.');
+      trackEvent(FLOW_EVENTS.DASHBOARD_VIEWED, { success: false });
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   if (loading) {
     return (
@@ -72,6 +75,15 @@ function MasteryDashboard() {
         <div className="mastery-dashboard-error" role="alert" data-testid="mastery-dashboard-error">
           {error}
         </div>
+        <button
+          type="button"
+          className="mastery-recommendation-btn"
+          onClick={load}
+          data-testid="mastery-dashboard-retry"
+        >
+          <RefreshCw size={16} />
+          <span>Retry</span>
+        </button>
       </div>
     );
   }

@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 import LessonOverview from './LessonOverview';
@@ -71,5 +71,31 @@ describe('LessonOverview', () => {
     renderOverview();
 
     expect(await screen.findByText('not found')).toBeInTheDocument();
+  });
+
+  it('lets the student retry after a failed load', async () => {
+    getLesson.mockRejectedValueOnce(new Error('network error'));
+    renderOverview();
+    await screen.findByTestId('lesson-overview-retry');
+
+    getLesson.mockResolvedValueOnce(LESSON);
+    fireEvent.click(screen.getByTestId('lesson-overview-retry'));
+
+    expect(await screen.findByTestId('lesson-overview-title')).toHaveTextContent(
+      'Understanding the Test Act'
+    );
+    expect(getLesson).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the end-to-end flow progress stepper and a link to the next step', async () => {
+    getLesson.mockResolvedValue(LESSON);
+    renderOverview();
+
+    await screen.findByTestId('lesson-overview-title');
+    expect(screen.getByTestId('lesson-flow-progress')).toBeInTheDocument();
+    expect(screen.getByTestId('lesson-flow-step-lesson').className).toContain('lesson-flow-step-current');
+    expect(screen.getByTestId('lesson-flow-next-button')).toHaveAttribute(
+      'href', '/lesson/lesson-abc/vocabulary'
+    );
   });
 });

@@ -1,6 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 
 import LessonReflection from './LessonReflection';
 import { submitReflection } from '../api';
@@ -8,6 +9,14 @@ import { submitReflection } from '../api';
 vi.mock('../api', () => ({
   submitReflection: vi.fn(),
 }));
+
+function renderComponent(initialState) {
+  return render(
+    <MemoryRouter initialEntries={[{ pathname: '/lesson/lesson-1/reflection', state: initialState }]}>
+      <LessonReflection lessonId="lesson-1" />
+    </MemoryRouter>
+  );
+}
 
 const REFLECTION = {
   reflection_id: 'refl-1',
@@ -46,7 +55,7 @@ function fillAndSubmit() {
 
 describe('LessonReflection', () => {
   it('disables submit until a transcript and a view-changed answer are given', () => {
-    render(<LessonReflection lessonId="lesson-1" />);
+    renderComponent();
     expect(screen.getByTestId('reflection-submit')).toBeDisabled();
 
     fireEvent.change(screen.getByTestId('reflection-transcript'), {
@@ -60,7 +69,7 @@ describe('LessonReflection', () => {
 
   it('submits the transcript, self-reported view change, and optional explanation', async () => {
     submitReflection.mockResolvedValue(REFLECTION);
-    render(<LessonReflection lessonId="lesson-1" />);
+    renderComponent();
 
     fireEvent.change(screen.getByTestId('reflection-transcript'), {
       target: { value: 'Pro: funding is good. Con: costs too much.' },
@@ -82,7 +91,7 @@ describe('LessonReflection', () => {
 
   it('renders grounded feedback with transcript excerpts', async () => {
     submitReflection.mockResolvedValue(REFLECTION);
-    render(<LessonReflection lessonId="lesson-1" />);
+    renderComponent();
     fillAndSubmit();
 
     expect(await screen.findByTestId('reflection-result')).toBeInTheDocument();
@@ -98,7 +107,7 @@ describe('LessonReflection', () => {
 
   it('shows the recommended skill and next activity', async () => {
     submitReflection.mockResolvedValue(REFLECTION);
-    render(<LessonReflection lessonId="lesson-1" />);
+    renderComponent();
     fillAndSubmit();
 
     expect(await screen.findByTestId('reflection-recommended-skill')).toHaveTextContent(
@@ -111,7 +120,7 @@ describe('LessonReflection', () => {
 
   it('never displays a winner/loser determination -- a separate rubric from judge_chain', async () => {
     submitReflection.mockResolvedValue(REFLECTION);
-    render(<LessonReflection lessonId="lesson-1" />);
+    renderComponent();
     fillAndSubmit();
 
     await screen.findByTestId('reflection-result');
@@ -120,7 +129,7 @@ describe('LessonReflection', () => {
 
   it('lets the student reflect on another debate', async () => {
     submitReflection.mockResolvedValue(REFLECTION);
-    render(<LessonReflection lessonId="lesson-1" />);
+    renderComponent();
     fillAndSubmit();
 
     await screen.findByTestId('reflection-result');
@@ -130,9 +139,24 @@ describe('LessonReflection', () => {
 
   it('shows an error message when generation fails', async () => {
     submitReflection.mockRejectedValue(new Error('generation failed'));
-    render(<LessonReflection lessonId="lesson-1" />);
+    renderComponent();
     fillAndSubmit();
 
     expect(await screen.findByText('generation failed')).toBeInTheDocument();
+  });
+
+  it('prefills the transcript when arriving from a Lesson Mode debate (Debate.jsx handoff)', () => {
+    renderComponent({ transcript: 'Pro: prefilled argument.\n\nCon: prefilled rebuttal.' });
+    expect(screen.getByTestId('reflection-transcript')).toHaveValue(
+      'Pro: prefilled argument.\n\nCon: prefilled rebuttal.'
+    );
+    // Only a view-changed answer is still needed once the transcript arrives prefilled.
+    fireEvent.click(screen.getByTestId('reflection-view-changed-yes'));
+    expect(screen.getByTestId('reflection-submit')).not.toBeDisabled();
+  });
+
+  it('leaves the transcript empty when arriving without router state (e.g. a direct refresh)', () => {
+    renderComponent();
+    expect(screen.getByTestId('reflection-transcript')).toHaveValue('');
   });
 });

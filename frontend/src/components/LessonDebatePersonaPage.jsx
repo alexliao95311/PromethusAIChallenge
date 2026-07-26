@@ -3,9 +3,12 @@ import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import LessonDebatePersona from './LessonDebatePersona';
 import LessonModeNav from './LessonModeNav';
+import LessonFlowProgress from './LessonFlowProgress';
 import './LessonSubPage.css';
 
-// Dynamic opposing debate persona service page (Increment 9).
+// Dynamic opposing debate persona service page (Increment 9). No
+// LessonFlowNextButton here -- Increment 12 wires "Start Debate" itself to
+// navigate onward into Debate.jsx, which is the actual next step.
 function LessonDebatePersonaPage() {
   const { lessonId } = useParams();
 
@@ -15,6 +18,7 @@ function LessonDebatePersonaPage() {
         <ArrowLeft size={18} />
         <span>Back to Lesson</span>
       </Link>
+      <LessonFlowProgress lessonId={lessonId} currentStepKey="debate-persona" />
       <LessonModeNav lessonId={lessonId} />
       <LessonDebatePersona lessonId={lessonId} />
     </div>

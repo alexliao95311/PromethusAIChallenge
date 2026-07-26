@@ -14,6 +14,8 @@ import EnhancedVoiceOutput from './EnhancedVoiceOutput';
 import { TTS_CONFIG, getVoiceForContext } from '../config/tts';
 import languagePreferenceService from '../services/languagePreferenceService';
 import { useTranslation } from '../utils/translations';
+import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
+import { markFlowStepComplete } from '../utils/lessonFlow';
 
 const modelOptions = [
   "openai/gpt-4o-mini",
@@ -54,7 +56,15 @@ function getLanguageInstructions(languageCode) {
   return ''; // No language instructions needed for English
 }
 
-function getPersonaPrompt(persona) {
+// `lessonPersonaPrompt` (Increment 12): when a debate arrives from Lesson
+// Mode's dynamically-generated opposing stakeholder (LessonDebatePersona.jsx),
+// it's passed through location.state and takes priority over the fixed
+// trump/harris/musk/drake lookup below -- every existing caller omits it,
+// so this is purely additive and changes no existing behavior.
+function getPersonaPrompt(persona, lessonPersonaPrompt) {
+  if (lessonPersonaPrompt) {
+    return `\nSTAKEHOLDER PERSONA INSTRUCTIONS:\n${lessonPersonaPrompt}\n\nAdopt this stakeholder's perspective completely for your debate response.`;
+  }
   switch (persona) {
     case "trump":
       return `
@@ -138,7 +148,7 @@ Adopt this smooth Toronto communication style completely for your debate respons
 
 function Debate() {
   // Retrieve debate parameters: short topic (bill name) and full description.
-  const { mode, debateMode, topic, description, billText, billTitle, selectedModel, debateFormat, proPersona: initialProPersona, conPersona: initialConPersona, aiPersona: initialAiPersona } = useLocation().state || {};
+  const { mode, debateMode, topic, description, billText, billTitle, selectedModel, debateFormat, proPersona: initialProPersona, conPersona: initialConPersona, aiPersona: initialAiPersona, lessonId, lessonPersonaPrompt } = useLocation().state || {};
   const navigate = useNavigate();
   const { t } = useTranslation();
 
@@ -199,6 +209,15 @@ function Debate() {
   const [speechList, setSpeechList] = useState([]);
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   const [descriptionExpanded, setDescriptionExpanded] = useState(false);
+
+  // Increment 12: track that a Lesson Mode debate actually started, once.
+  useEffect(() => {
+    if (lessonId) {
+      trackEvent(FLOW_EVENTS.DEBATE_STARTED, { lessonId });
+      markFlowStepComplete(lessonId, 'debate-persona');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Debate Models and mode-specific states.
   const [proModel, setProModel] = useState(modelOptions[0]);
@@ -560,7 +579,15 @@ function Debate() {
     setError("");
     try {
       const finalTranscript = buildPlainTranscript();
-      navigate("/judge", { state: { transcript: finalTranscript, topic, mode: isBillDebate ? 'bill-debate' : actualMode, judgeModel: getJudgeModel() } });
+      if (lessonId) {
+        // Increment 12: a Lesson Mode debate ends into the post-debate
+        // reflection page (with the transcript prefilled) instead of the
+        // generic judge page, connecting the flow through to Increment 10.
+        trackEvent(FLOW_EVENTS.DEBATE_ENDED, { lessonId, success: true });
+        navigate(`/lesson/${lessonId}/reflection`, { state: { transcript: finalTranscript } });
+      } else {
+        navigate("/judge", { state: { transcript: finalTranscript, topic, mode: isBillDebate ? 'bill-debate' : actualMode, judgeModel: getJudgeModel() } });
+      }
     } catch (err) {
       console.error("Error ending debate:", err);
       setError(t('error.failedToEnd'));
@@ -1764,7 +1791,7 @@ IMPORTANT: If this is not the opening statement, you MUST include a rebuttal of 
 
 YOUR ROLE: CON (opposing the topic)
 
-${getPersonaPrompt(aiPersona)}
+${getPersonaPrompt(aiPersona, lessonPersonaPrompt)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚨 ABSOLUTE PRIORITY - READ THIS FIRST 🚨
@@ -1819,7 +1846,7 @@ FORMATTING:
 
 YOUR ROLE: NEGATIVE (negating the resolution)
 
-${getPersonaPrompt(aiPersona)}
+${getPersonaPrompt(aiPersona, lessonPersonaPrompt)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚨 ABSOLUTE PRIORITY - READ THIS FIRST 🚨
@@ -1847,7 +1874,7 @@ Present your framework (Value/Criterion) and 2-3 contentions against the resolut
              Bill description: "${truncatedDescription}"
              Your role: Opening speaker for the CON side
 
-             ${getPersonaPrompt(aiPersona)}
+             ${getPersonaPrompt(aiPersona, lessonPersonaPrompt)}
 
              Instructions:
              1. Provide an opening argument against the topic
@@ -1884,7 +1911,7 @@ ${languageInstructions}
 
 YOUR ROLE: PRO (supporting the topic)
 
-${getPersonaPrompt(aiPersona)}
+${getPersonaPrompt(aiPersona, lessonPersonaPrompt)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚨 ABSOLUTE PRIORITY - READ THIS FIRST 🚨
@@ -1941,7 +1968,7 @@ ${languageInstructions}
 
 YOUR ROLE: AFFIRMATIVE (affirming the resolution)
 
-${getPersonaPrompt(aiPersona)}
+${getPersonaPrompt(aiPersona, lessonPersonaPrompt)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚨 ABSOLUTE PRIORITY - READ THIS FIRST 🚨
@@ -1972,7 +1999,7 @@ ${languageInstructions}
              Bill description: "${truncatedDescription}"
              Your role: Opening speaker for the PRO side
 
-             ${getPersonaPrompt(aiPersona)}
+             ${getPersonaPrompt(aiPersona, lessonPersonaPrompt)}
 
              Instructions:
              1. Provide an opening argument in favor of the topic
@@ -2117,7 +2144,7 @@ ${languageInstructions}
 
 YOUR ROLE: ${aiSideLocal.toUpperCase()} (debating against the user's ${userSide.toUpperCase()} position)
 
-${getPersonaPrompt(currentPersona)}
+${getPersonaPrompt(currentPersona, lessonPersonaPrompt)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚨 ABSOLUTE PRIORITY - READ THIS FIRST 🚨
@@ -2227,7 +2254,7 @@ ${languageInstructions}
 
 YOUR ROLE: ${aiSideLocal.toUpperCase() === "PRO" ? "AFFIRMATIVE" : "NEGATIVE"} (debating against the user's ${userSide.toUpperCase()} position)
 
-${getPersonaPrompt(currentPersona)}
+${getPersonaPrompt(currentPersona, lessonPersonaPrompt)}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚨 ABSOLUTE PRIORITY - READ THIS FIRST 🚨
@@ -2358,7 +2385,7 @@ CONTENT REQUIREMENTS:
 • **AVOID REPETITION** - each speech should add NEW analysis, evidence, or framing, not just repeat old points
 • **SHOW PROGRESSION** - demonstrate you're listening and adapting, not reading from a script
 
-${getPersonaPrompt(aiPersona)}
+${getPersonaPrompt(aiPersona, lessonPersonaPrompt)}
 - Use specific evidence, examples, or logical reasoning
 - Keep your response concise (max 400 words)
 - Be persuasive but respectful

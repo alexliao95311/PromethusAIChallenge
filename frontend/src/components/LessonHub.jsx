@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { generateLesson } from '../api';
 import { saveLessonBillText } from '../utils/lessonSession';
+import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
 import './LessonHub.css';
 
 function slugify(text) {
@@ -33,15 +34,18 @@ function LessonHub() {
     setError('');
     try {
       const billId = incoming.billId || slugify(billTitle) || `bill-${Date.now()}`;
+      trackEvent(FLOW_EVENTS.BILL_SELECTED, { lessonId: billId });
       const lesson = await generateLesson(billId, billText, {
         includeVocabulary: true,
         includeQuiz: true,
         includeOpenResponse: true,
       });
       saveLessonBillText(lesson.lesson_id, billText, billTitle);
+      trackEvent(FLOW_EVENTS.LESSON_VIEWED, { lessonId: lesson.lesson_id, success: true });
       navigate(`/lesson/${lesson.lesson_id}`);
     } catch (err) {
       setError(err?.response?.data?.detail || err.message || 'Failed to generate the lesson.');
+      trackEvent(FLOW_EVENTS.LESSON_VIEWED, { success: false });
     } finally {
       setLoading(false);
     }

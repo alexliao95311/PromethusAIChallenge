@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { getQuizQuestions, submitQuizAnswers } from '../api';
+import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
+import { markFlowStepComplete } from '../utils/lessonFlow';
 import './LessonQuiz.css';
 
 function LessonQuiz({ lessonId }) {
@@ -48,8 +50,11 @@ function LessonQuiz({ lessonId }) {
       }));
       const data = await submitQuizAnswers(lessonId, answers);
       setResult(data);
+      markFlowStepComplete(lessonId, 'quiz');
+      trackEvent(FLOW_EVENTS.QUIZ_COMPLETED, { lessonId, success: true });
     } catch (err) {
       setError(err?.response?.data?.detail || err.message || 'Failed to submit the quiz.');
+      trackEvent(FLOW_EVENTS.QUIZ_COMPLETED, { lessonId, success: false });
     } finally {
       setSubmitting(false);
     }

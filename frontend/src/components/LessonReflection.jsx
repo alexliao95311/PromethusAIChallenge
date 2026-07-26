@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import { submitReflection } from '../api';
+import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
+import { markFlowStepComplete } from '../utils/lessonFlow';
 import './LessonReflection.css';
 
 const VIEW_CHANGE_OPTIONS = [
@@ -26,7 +29,12 @@ const FEEDBACK_FIELDS = [
 // debate transcript, mirroring Increment 9's LessonDebatePersona (Debate.jsx
 // doesn't yet pass its transcript back into Lesson Mode).
 function LessonReflection({ lessonId }) {
-  const [transcript, setTranscript] = useState('');
+  const location = useLocation();
+  // Increment 12: when arriving straight from a Lesson Mode debate
+  // (Debate.jsx's "End Debate" navigates here with the transcript), prefill
+  // it so the student doesn't have to paste it in manually. Falls back to
+  // an empty field, same as before, when arriving directly (e.g. a refresh).
+  const [transcript, setTranscript] = useState(location.state?.transcript || '');
   const [viewChanged, setViewChanged] = useState('');
   const [explanation, setExplanation] = useState('');
 
@@ -47,8 +55,11 @@ function LessonReflection({ lessonId }) {
         explanation: explanation.trim() || undefined,
       });
       setReflection(data);
+      markFlowStepComplete(lessonId, 'reflection');
+      trackEvent(FLOW_EVENTS.REFLECTION_SUBMITTED, { lessonId, success: true });
     } catch (err) {
       setError(err?.response?.data?.detail || err.message || 'Failed to generate your reflection.');
+      trackEvent(FLOW_EVENTS.REFLECTION_SUBMITTED, { lessonId, success: false });
     } finally {
       setSubmitting(false);
     }

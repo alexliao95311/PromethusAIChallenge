@@ -86,6 +86,42 @@ _reflection_generation_service = ReflectionGenerationService(
 _mastery_dashboard_service = MasteryDashboardService(repository=_lesson_generation_service.repository)
 
 
+# ---------------------------------------------------------------------------
+# Analytics (Increment 12)
+#
+# A structured logging hook for the end-to-end Lesson Mode flow, not a full
+# analytics pipeline (no GA4/Mixpanel/etc. integration -- out of scope).
+# `event_type` is a closed enum and every other field is a bounded primitive
+# -- there is no freeform string field anywhere in this model, so bill text,
+# quiz answers, debate transcripts, or any other student-authored content can
+# never reach this endpoint or the server logs it writes to, by construction
+# rather than by convention. No auth required: some flow stages (choosing a
+# bill, viewing a generated lesson) happen before/without sign-in.
+# ---------------------------------------------------------------------------
+
+FlowEventType = Literal[
+    "bill_selected", "persona_step_viewed", "impact_generated", "lesson_viewed",
+    "vocabulary_reviewed", "quiz_completed", "open_response_completed",
+    "debate_started", "debate_ended", "reflection_submitted", "dashboard_viewed",
+]
+
+
+class AnalyticsEventRequest(BaseModel):
+    event_type: FlowEventType
+    lesson_id: Optional[str] = Field(default=None, max_length=200)
+    step_index: Optional[int] = Field(default=None, ge=0, le=20)
+    success: Optional[bool] = None
+
+
+@router.post("/analytics/event")
+async def log_analytics_event(request: AnalyticsEventRequest):
+    logger.info(
+        "lesson_flow_event event_type=%s lesson_id=%s step_index=%s success=%s",
+        request.event_type, request.lesson_id, request.step_index, request.success,
+    )
+    return {"logged": True}
+
+
 class RetrieveSectionsRequest(BaseModel):
     bill_id: str = Field(..., min_length=1)
     query: str = Field(..., min_length=1)
