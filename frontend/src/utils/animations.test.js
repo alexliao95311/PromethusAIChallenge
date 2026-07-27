@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { prefersReducedMotion, staggerFadeUp, animateCountUp, animateBarFill, popIn } from './animations';
+import { prefersReducedMotion, staggerFadeUp, animateCountUp, animateBarFill, popIn, flipCard } from './animations';
 
 function mockMatchMedia(reduced) {
   window.matchMedia = vi.fn().mockImplementation((query) => ({
@@ -68,6 +68,7 @@ describe('animations', () => {
     expect(() => animateCountUp(null, 5)).not.toThrow();
     expect(() => animateBarFill(null, 5)).not.toThrow();
     expect(() => popIn(null)).not.toThrow();
+    expect(() => flipCard(null)).not.toThrow();
   });
 
   it('does not throw when motion is not reduced (real anime.js path)', () => {
@@ -76,7 +77,17 @@ describe('animations', () => {
     document.body.appendChild(el);
     expect(() => animateBarFill(el, 60)).not.toThrow();
     expect(() => popIn(el)).not.toThrow();
+    expect(() => flipCard(el)).not.toThrow();
+    expect(() => flipCard(el, { direction: -1 })).not.toThrow();
     const span = document.createElement('span');
     expect(() => animateCountUp(span, 10)).not.toThrow();
+  });
+
+  it('flipCard clears any inline transform instead of animating when motion is reduced', () => {
+    mockMatchMedia(true);
+    const el = document.createElement('div');
+    el.style.transform = 'rotateY(45deg)';
+    flipCard(el);
+    expect(el.style.transform).toBe('');
   });
 });

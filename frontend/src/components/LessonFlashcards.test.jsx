@@ -4,11 +4,16 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 import LessonFlashcards from './LessonFlashcards';
 import { getReviewState, submitReviewAnswer, startReviewSession } from '../api';
+import { flipCard } from '../utils/animations';
 
 vi.mock('../api', () => ({
   getReviewState: vi.fn(),
   submitReviewAnswer: vi.fn(),
   startReviewSession: vi.fn(),
+}));
+
+vi.mock('../utils/animations', () => ({
+  flipCard: vi.fn(),
 }));
 
 const CARD_A = {
@@ -143,6 +148,31 @@ describe('LessonFlashcards', () => {
       expect(startReviewSession).toHaveBeenCalledWith('lesson-1');
     });
     expect(await screen.findByTestId('flashcard-term')).toHaveTextContent('appropriation');
+  });
+
+  it('flips the card when the answer is revealed', async () => {
+    getReviewState.mockResolvedValue(makeState([CARD_A]));
+    render(<LessonFlashcards lessonId="lesson-1" />);
+
+    await screen.findByTestId('flashcard-term');
+    fireEvent.click(screen.getByTestId('reveal-answer'));
+
+    expect(flipCard).toHaveBeenCalledWith(expect.any(HTMLElement), { direction: 1 });
+  });
+
+  it('flips the card the other way when a new card\'s front appears', async () => {
+    getReviewState.mockResolvedValue(makeState([CARD_A, CARD_B]));
+    submitReviewAnswer.mockResolvedValue({ card_id: 'card-a', leitner_box: 2 });
+    render(<LessonFlashcards lessonId="lesson-1" />);
+
+    await screen.findByTestId('flashcard-term');
+    fireEvent.click(screen.getByTestId('reveal-answer'));
+    flipCard.mockClear();
+    fireEvent.click(screen.getByTestId('mark-correct'));
+
+    await waitFor(() => {
+      expect(flipCard).toHaveBeenCalledWith(expect.any(HTMLElement), { direction: -1 });
+    });
   });
 
   it('shows a "Needs review" label for a Box 1 card', async () => {

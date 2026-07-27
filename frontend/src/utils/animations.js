@@ -75,3 +75,20 @@ export function popIn(el) {
     ease: 'outBack',
   });
 }
+
+// A 3D card-flip reveal: the card turns from edge-on to face-on, so
+// whatever content is already in the DOM when this runs (React has already
+// swapped it) appears to have been "turned to". Needs `perspective` set on
+// an ancestor for the rotation to read as 3D rather than a flat squish.
+export function flipCard(el, { direction = 1 } = {}) {
+  if (!el) return;
+  if (prefersReducedMotion()) {
+    el.style.transform = '';
+    return;
+  }
+  animate(el, {
+    rotateY: [90 * direction, 0],
+    duration: 480,
+    ease: 'outQuint',
+  });
+}

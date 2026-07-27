@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, XCircle, Sparkles } from 'lucide-react';
 import { getReviewState, startReviewSession, submitReviewAnswer } from '../api';
 import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
 import { markFlowStepComplete } from '../utils/lessonFlow';
+import { flipCard } from '../utils/animations';
 import './LessonFlashcards.css';
 
 const BOX_LABELS = { 1: 'Needs review', 2: 'Learning', 3: 'Mastered' };
@@ -20,6 +21,15 @@ function LessonFlashcards({ lessonId }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const cardRef = useRef(null);
+
+  // The flashcard's signature moment: it turns from edge-on to face-on
+  // whenever its visible face changes -- once when the answer is revealed,
+  // and again (the other direction, so it doesn't feel repetitive) whenever
+  // a new card's front appears.
+  useEffect(() => {
+    flipCard(cardRef.current, { direction: revealed ? 1 : -1 });
+  }, [revealed, currentIndex]);
 
   const loadState = useCallback(async () => {
     setLoading(true);
@@ -156,7 +166,8 @@ function LessonFlashcards({ lessonId }) {
           </button>
         </div>
       ) : (
-        <div className="flashcard-review-card" data-testid="flashcard-card">
+        <div className="flashcard-review-card-perspective">
+        <div className="flashcard-review-card" data-testid="flashcard-card" ref={cardRef}>
           <div className="flashcard-progress" data-testid="flashcard-progress">
             Card {currentIndex + 1} of {dueQueue.length}
           </div>
@@ -208,6 +219,7 @@ function LessonFlashcards({ lessonId }) {
               </div>
             </div>
           )}
+        </div>
         </div>
       )}
     </div>
