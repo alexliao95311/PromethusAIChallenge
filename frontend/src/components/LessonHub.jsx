@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { generateLesson } from '../api';
 import { saveLessonBillText } from '../utils/lessonSession';
 import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
+import { staggerFadeUp } from '../utils/animations';
 import './LessonHub.css';
 
 function slugify(text) {
@@ -27,6 +28,11 @@ function LessonHub() {
   const [billText, setBillText] = useState(incoming.billText || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const cardRef = useRef(null);
+
+  useEffect(() => {
+    if (cardRef.current) staggerFadeUp(cardRef.current.children, { staggerMs: 70 });
+  }, []);
 
   const handleGenerate = async () => {
     if (loading || !billText.trim()) return;
@@ -58,8 +64,8 @@ function LessonHub() {
         <span>Back to Home</span>
       </Link>
 
-      <div className="lesson-hub-card">
-        <div className="lesson-hub-icon">
+      <div className="lesson-hub-card" ref={cardRef}>
+        <div className={`lesson-hub-icon ${loading ? 'lesson-hub-icon-busy' : ''}`}>
           <BookOpen size={28} />
         </div>
         <h1 className="lesson-hub-title">Start a Lesson</h1>

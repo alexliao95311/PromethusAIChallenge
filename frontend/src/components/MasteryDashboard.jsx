@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { RefreshCw, Sparkles, TrendingUp } from 'lucide-react';
 import { getMasteryDashboard } from '../api';
 import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
+import { animateBarFill, animateCountUp, staggerFadeUp } from '../utils/animations';
 import './MasteryDashboard.css';
 
 const ACTIVITY_LINKS = {
@@ -20,11 +21,19 @@ function activityLink(activity) {
   return build(activity.lesson_id);
 }
 
-function MasteryBar({ percent, testId }) {
+function MasteryBar({ percent, testId, delay = 0 }) {
   const clamped = Math.max(0, Math.min(100, percent));
+  const fillRef = useRef(null);
+
+  useEffect(() => {
+    animateBarFill(fillRef.current, clamped, { delay });
+    // Only re-run when the underlying percent changes -- not on every parent re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clamped]);
+
   return (
     <div className="mastery-bar-track" data-testid={testId}>
-      <div className="mastery-bar-fill" style={{ width: `${clamped}%` }} />
+      <div ref={fillRef} className="mastery-bar-fill" style={{ width: 0 }} />
       <span className="mastery-bar-label">{clamped}%</span>
     </div>
   );
@@ -41,6 +50,9 @@ function MasteryDashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const overviewRef = useRef(null);
+  const lessonListRef = useRef(null);
+  const cardsDueRef = useRef(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -60,6 +72,16 @@ function MasteryDashboard() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // The dashboard's signature moment: once real progress data lands, the
+  // overview stats and per-bill cards stagger in together, and the "cards
+  // due" count ticks up -- everything else on the page stays quiet.
+  useEffect(() => {
+    if (!dashboard?.has_activity) return;
+    if (overviewRef.current) staggerFadeUp(overviewRef.current.children, { staggerMs: 90 });
+    if (lessonListRef.current) staggerFadeUp(lessonListRef.current.children, { delay: 120, staggerMs: 70 });
+    animateCountUp(cardsDueRef.current, dashboard.overall_cards_due, { duration: 700 });
+  }, [dashboard]);
 
   if (loading) {
     return (
@@ -131,7 +153,7 @@ function MasteryDashboard() {
         </div>
       ) : (
         <>
-          <section className="mastery-overview-grid">
+          <section className="mastery-overview-grid" ref={overviewRef}>
             <div className="mastery-stat-card">
               <span className="mastery-stat-value" data-testid="mastery-completed-count">
                 {completedLessonCount} / {totalLessonsStarted}
@@ -146,8 +168,14 @@ function MasteryDashboard() {
               <MasteryBar percent={overallVocabPercent} testId="mastery-overall-vocab-bar" />
             </div>
             <div className="mastery-stat-card">
-              <span className="mastery-stat-value" data-testid="mastery-cards-due">
+              <span
+                ref={cardsDueRef}
+                className="mastery-stat-value"
+                data-testid="mastery-cards-due"
+              >
                 {overallCardsDue}
+                {/* Overwritten on mount by animateCountUp (or immediately, unchanged, when
+                    prefers-reduced-motion is set) -- this static value is the no-JS/first-paint fallback. */}
               </span>
               <span className="mastery-stat-label">Flashcards due for review</span>
             </div>
@@ -155,7 +183,7 @@ function MasteryDashboard() {
 
           <section className="mastery-section">
             <h2 className="mastery-section-title">Progress by Bill</h2>
-            <div className="mastery-lesson-list" data-testid="mastery-lesson-list">
+            <div className="mastery-lesson-list" data-testid="mastery-lesson-list" ref={lessonListRef}>
               {lessons.map((lesson) => (
                 <div key={lesson.lesson_id} className="mastery-lesson-card" data-testid={`mastery-lesson-${lesson.lesson_id}`}>
                   <div className="mastery-lesson-head">

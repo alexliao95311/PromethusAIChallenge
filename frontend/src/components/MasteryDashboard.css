@@ -137,7 +137,8 @@
 .mastery-bar-fill {
   height: 100%;
   background: linear-gradient(90deg, #4a90e2, #34d399);
-  transition: width 0.3s ease;
+  /* Width is animated imperatively by animateBarFill (utils/animations.js);
+     no CSS transition here so it doesn't fight the JS-driven animation. */
 }
 
 .mastery-bar-label {

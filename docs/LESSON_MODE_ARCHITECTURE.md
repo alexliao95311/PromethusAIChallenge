@@ -1337,3 +1337,39 @@ and `MasteryDashboard.test.jsx` gained retry-button tests.
   manual click-through, not an automated timer/benchmark.
 - Analytics is a structured-logging hook, not a real analytics
   product (no dashboard, no retention, no aggregation beyond server logs).
+
+## Motion layer (anime.js)
+
+`frontend/src/utils/animations.js` wraps anime.js v4 (`animate`, `stagger`)
+behind four small helpers -- `staggerFadeUp`, `animateCountUp`,
+`animateBarFill`, `popIn` -- applied deliberately at a few places that mark
+real progress, not scattered across every element: the mastery
+dashboard's stat cards/per-bill cards stagger in and the "cards due" count
+ticks up on load (the dashboard's signature moment); the 9-step flow
+stepper (`LessonFlowProgress`) stagger-fades in and the current step's
+marker pops; the lesson hub's hero card stagger-fades in on mount and its
+icon pulses while a lesson is generating; the reflection page's feedback
+cards reveal in sequence once results arrive. Every helper checks
+`prefers-reduced-motion` first and snaps straight to the end state instead
+of animating when it's set.
+
+Two correctness constraints shaped where animation was and wasn't applied:
+
+- **`prefersReducedMotion()` guards against `window.matchMedia` not
+  existing at all**, not just against it reporting `false` -- this
+  project's jsdom test environment doesn't implement `matchMedia` (unlike
+  most component libraries' assumption), so the naive `window.matchMedia?.(...)
+  .matches` pattern would throw in every component test. Caught and fixed
+  before wiring animation into any component; regression-tested in
+  `animations.test.js`.
+- **Numbers with an existing exact-text test assertion are never animated
+  via textContent overwrite** (e.g. `mastery-overall-vocab`,
+  `mastery-completed-count` in `MasteryDashboard.test.jsx` check
+  `toHaveTextContent('62.5%')` synchronously right after render). A
+  count-up animation starting from 0 would make that assertion flaky
+  against real timing. `animateCountUp` is only wired to
+  `mastery-cards-due`, the one stat with no exact-text test; `MasteryBar`'s
+  percentage label stays a normal, always-correct React-rendered `<span>`
+  and only the (text-free) fill `<div>`'s width is animated. This is why
+  every existing Lesson Mode test still passes unchanged with real
+  animation code running in the same jsdom environment (not mocked out).

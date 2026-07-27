@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Check } from 'lucide-react';
 import { FLOW_STEPS, isFlowStepComplete } from '../utils/lessonFlow';
+import { popIn, staggerFadeUp } from '../utils/animations';
 import './LessonFlowProgress.css';
 
 // End-to-end Lesson Mode progress stepper (Increment 12): shows every step
@@ -13,8 +14,21 @@ import './LessonFlowProgress.css';
 // the mastery dashboard) for steps where the local flag alone would be
 // incomplete/stale; steps without an override fall back to the local flag.
 function LessonFlowProgress({ lessonId, currentStepKey, completedOverride = {} }) {
+  const navRef = useRef(null);
+  const currentMarkerRef = useRef(null);
+
+  useEffect(() => {
+    if (navRef.current) staggerFadeUp(navRef.current.querySelectorAll('.lesson-flow-step'), { staggerMs: 30 });
+    // Runs once per page mount, not on every completedOverride re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    popIn(currentMarkerRef.current);
+  }, [currentStepKey]);
+
   return (
-    <nav className="lesson-flow-progress" aria-label="Lesson Mode workflow progress" data-testid="lesson-flow-progress">
+    <nav className="lesson-flow-progress" aria-label="Lesson Mode workflow progress" data-testid="lesson-flow-progress" ref={navRef}>
       {FLOW_STEPS.map((step, idx) => {
         const isCurrent = step.key === currentStepKey;
         const isComplete = completedOverride[step.key] ?? isFlowStepComplete(lessonId, step.key);
@@ -29,7 +43,10 @@ function LessonFlowProgress({ lessonId, currentStepKey, completedOverride = {} }
               ].join(' ').trim()}
               data-testid={`lesson-flow-step-${step.key}`}
             >
-              <span className="lesson-flow-step-marker">
+              <span
+                className="lesson-flow-step-marker"
+                ref={isCurrent ? currentMarkerRef : null}
+              >
                 {isComplete ? <Check size={12} /> : idx + 1}
               </span>
               <span className="lesson-flow-step-label">

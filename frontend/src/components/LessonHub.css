@@ -43,6 +43,21 @@
   margin-bottom: 1rem;
 }
 
+.lesson-hub-icon-busy {
+  animation: lesson-hub-icon-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes lesson-hub-icon-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.08); opacity: 0.75; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lesson-hub-icon-busy {
+    animation: none;
+  }
+}
+
 .lesson-hub-title {
   font-size: 1.6rem;
   margin: 0 0 0.6rem 0;

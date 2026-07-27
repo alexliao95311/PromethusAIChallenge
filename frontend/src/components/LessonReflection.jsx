@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Sparkles } from 'lucide-react';
 import { submitReflection } from '../api';
 import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
 import { markFlowStepComplete } from '../utils/lessonFlow';
+import { staggerFadeUp } from '../utils/animations';
 import './LessonReflection.css';
 
 const VIEW_CHANGE_OPTIONS = [
@@ -41,6 +42,15 @@ function LessonReflection({ lessonId }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [reflection, setReflection] = useState(null);
+  const resultRef = useRef(null);
+
+  useEffect(() => {
+    if (reflection && resultRef.current) {
+      // The reflection's payoff moment: the self-report, each feedback
+      // card, and the next-steps box reveal in sequence.
+      staggerFadeUp(resultRef.current.children, { staggerMs: 90 });
+    }
+  }, [reflection]);
 
   const canSubmit = transcript.trim() && viewChanged && !submitting;
 
@@ -133,7 +143,7 @@ function LessonReflection({ lessonId }) {
           </button>
         </div>
       ) : (
-        <div className="lesson-reflection-result" data-testid="reflection-result">
+        <div className="lesson-reflection-result" data-testid="reflection-result" ref={resultRef}>
           <div className="lesson-reflection-self-report">
             <Sparkles size={16} />
             <span>
