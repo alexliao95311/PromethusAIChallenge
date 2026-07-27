@@ -32,9 +32,9 @@ function MasteryBar({ percent, testId, delay = 0 }) {
   }, [clamped]);
 
   return (
-    <div className="mastery-bar-track" data-testid={testId}>
-      <div ref={fillRef} className="mastery-bar-fill" style={{ width: 0 }} />
-      <span className="mastery-bar-label">{clamped}%</span>
+    <div className="dashboard-mastery-bar-track" data-testid={testId}>
+      <div ref={fillRef} className="dashboard-mastery-bar-fill" style={{ width: 0 }} />
+      <span className="dashboard-mastery-bar-label">{clamped}%</span>
     </div>
   );
 }
