@@ -1,5 +1,6 @@
 # Ignore .env
 .env
+./frontend/.env
 
 # Ignore local Python environment folder (if not already ignored)
 my-venv/
