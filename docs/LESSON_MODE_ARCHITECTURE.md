@@ -1,14 +1,15 @@
 # Lesson Mode Architecture
 
-Status: **Increment 9 — Dynamic Opposing Debate Persona.** Adds a
-generated, bill-grounded opposing stakeholder persona that plugs into
-DebateSim's existing, unmodified debate engine (`chains/debater_chain.py`)
-via the `"PERSONA INSTRUCTIONS:"` marker it already supported but the
-frontend never used. Distinct from Increment 8's `PersonalImpactNarrative`
-(which explains impact on the *student's own* persona): this generates the
-*opposing debate voice*. Flashcard/quiz analytics and a Lesson Mode
-frontend page still do not exist; existing debate/bill functionality is
-untouched -- see "Dynamic debate persona" below.
+Status: **Increment 12 — End-to-End Lesson Mode (complete).** All twelve
+increments are implemented: data models, bill-section RAG, grounded lesson
+generation, vocabulary, Leitner flashcards, multiple-choice quiz,
+open-response grading, persona builder, personalized bill-impact narrative,
+dynamic opposing debate persona (reusing `chains/debater_chain.py`
+unmodified), post-debate reflection, and the mastery dashboard are wired
+into one guided flow (bill -> persona -> personal impact -> lesson ->
+vocabulary -> quiz -> open response -> debate -> reflection -> mastery
+dashboard). See "Increment 12: end-to-end Lesson Mode" below for the wiring
+details, and "Testing" for the full test inventory.
 
 ## Why
 

@@ -179,7 +179,7 @@ class LegiScanService:
             return self.search_cache[cache_key]
 
         try:
-            url = self._build_url("getSearchRaw", state=state.upper(), query=query)
+            url = self._build_url("getSearch", state=state.upper(), query=query)
 
             async with self.session.get(url) as response:
                 if response.status != 200:
@@ -189,11 +189,15 @@ class LegiScanService:
                 data = await response.json()
 
                 if data.get("status") == "OK":
-                    search_results = data.get("searchresult", [])
+                    # searchresult is a dict keyed by "summary" plus numeric
+                    # string indices ("0", "1", ...) for each match, not a list.
+                    search_results = data.get("searchresult", {})
                     bills = []
 
-                    for result in search_results[:limit]:
-                        if isinstance(result, dict) and "bill_id" in result:
+                    for key, result in search_results.items():
+                        if key == "summary" or not isinstance(result, dict):
+                            continue
+                        if "bill_id" in result:
                             bills.append({
                                 "id": result.get("bill_id"),
                                 "number": result.get("bill_number", ""),
@@ -207,8 +211,9 @@ class LegiScanService:
                                 "relevance": result.get("relevance", 0)
                             })
 
-                    # Sort by relevance
+                    # Sort by relevance, then apply the limit
                     bills.sort(key=lambda x: x.get("relevance", 0), reverse=True)
+                    bills = bills[:limit]
 
                     self.search_cache[cache_key] = bills
                     return bills

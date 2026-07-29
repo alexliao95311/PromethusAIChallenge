@@ -1,580 +1,293 @@
-# DebateSim: AI-Powered Legislative Analysis & Debate Platform
+# DebateSim
 
 <div align="center">
 
-![DebateSim Logo](https://img.shields.io/badge/DebateSim-AI%20Powered%20Debates-blue?style=for-the-badge)
+### Learn to think critically by debating an AI that talks back.
 
-**An intelligent debate simulation platform powered by advanced AI models for democratic discourse and legislative analysis**
+**DebateSim is an AI-powered debate coach and civic-learning platform that gives every learner an opponent, a coach, and a judge—on demand.**
 
-## **[LIVE DEMO - debatesim.us](https://debatesim.us)**
-
-[![GitHub](https://img.shields.io/badge/GitHub-Repository-black?style=flat-square&logo=github)](https://github.com/alexliao95311/DebateSim)
-[![Documentation](https://img.shields.io/badge/Documentation-Technical%20Report-green?style=flat-square&logo=gitbook)](docs/PROJECT_REPORT.md)
-[![API Reference](https://img.shields.io/badge/API-Reference%20Guide-blue?style=flat-square&logo=swagger)](docs/API_REFERENCE.md)
+[Try the live app](https://debatesim.us) · [View the source code](https://github.com/alexliao95311/PromethusAIChallenge) · **[2-minute demo video — add link before submission](#two-minute-demo-plan)**
 
 </div>
 
 ---
 
-## **Documentation**
+## The problem
 
-**Complete Technical Documentation** is available in the [`docs/`](docs/) folder:
+Debate builds research, communication, media literacy, and critical-thinking skills, but meaningful practice is difficult to access. A learner usually needs a partner, a coach, a judge, a shared schedule, and enough subject knowledge to begin. Feedback may arrive long after a speech, and students often practice only the side they already understand.
 
-- **[Technical Project Report](docs/PROJECT_REPORT.md)** - Comprehensive analysis covering AI techniques, architecture, ethics, and evaluation
-- **[API Reference Guide](docs/API_REFERENCE.md)** - Developer documentation with code examples and integration guides
-- **[Documentation Hub](docs/README.md)** - Navigation guide for researchers, developers, and educators
+Civic topics add another barrier: bills and ballot measures are long, technical, and intimidating. Students cannot debate policy well if they cannot first understand what the policy does.
 
-*For quick access to specific sections, see the [Documentation Navigation Guide](docs/README.md#quick-navigation)*
+DebateSim removes those barriers. A learner can choose a topic, take either side, speak or type an argument, receive a contextual AI response, and get immediate, speech-specific coaching. They can also explore real legislation, turn it into understandable analysis, and use it as the subject of a structured debate.
 
----
+## What DebateSim teaches
 
-## Problem Statement and Motivation
+- **Argument construction:** turn claims into supported reasoning with warrants and impacts.
+- **Rebuttal and listening:** respond to the argument that was actually made instead of repeating a prepared case.
+- **Strategic communication:** prioritize, compare impacts, remove filler, and make limited speaking time count.
+- **Perspective-taking:** practice both affirmative and negative positions against varied AI opponents.
+- **Civic literacy:** break down federal bills, state bills, and California propositions into understandable dimensions.
+- **Reflection:** review transcripts, round-specific feedback, judge decisions, and concrete rewrites.
 
-### The Challenge of Democratic Discourse
+The central learning loop is simple:
 
-In an era of increasing polarization and declining civic engagement, quality democratic discourse has become critically endangered. Several key challenges motivated the development of DebateSim:
-
-1. **Educational Gap**: Students and educators lack accessible tools for practicing structured argumentation and debate skills
-2. **Legislative Complexity**: Citizens struggle to understand complex legislative documents and their implications
-3. **Bias and Echo Chambers**: Limited exposure to well-reasoned opposing viewpoints reinforces existing beliefs
-4. **Accessibility Barriers**: Traditional debate formats require significant resources, scheduling, and expertise
-5. **Lack of Objective Analysis**: Human bias often clouds debate evaluation and feedback
-
-### Our Vision
-
-DebateSim addresses these challenges by democratizing access to high-quality debate experiences through AI technology. The platform aims to:
-
-- **Enhance Critical Thinking**: Provide structured environments for developing argumentation skills
-- **Increase Civic Engagement**: Make legislative analysis accessible to everyday citizens
-- **Combat Misinformation**: Offer fact-based, multi-perspective analysis of complex issues
-- **Scale Educational Impact**: Enable simultaneous debate experiences for unlimited users
-- **Preserve Democratic Values**: Maintain human agency while leveraging AI assistance
-
----
-
-## **Key Features**
-
-### **Multi-Model AI Integration**
-- **4+ AI Providers**: GPT-4o, Claude 3.5 Sonnet, Gemini 2.0 Flash, LLaMA 3.3 with real-time switching
-- **Intelligent Fallbacks**: Automatic model switching for improved reliability
-- **Specialized Prompts**: Custom-engineered for debate, analysis, and judging
-- **Custom LangChain Integration**: Built custom `OpenRouterChat` class for OpenRouter API compatibility
-
-### **Comprehensive Legislative Analysis**
-- **Federal Bills**: Real-time integration with Congress.gov API (119th Congress)
-- **State Bills**: All 50 US states via LegiScan API with multi-session support
-- **California Propositions**: Ballot measures from CA Secretary of State
-- **Advanced PDF Processing**: Handle 40,000+ character legislative documents
-- **6-Criteria Grading System**: Economic Impact, Public Benefit, Implementation Feasibility, Constitutional Concerns, Political Viability, Democratic Impact
-- **Smart Section Extraction**: Intelligent parsing of bill sections for targeted analysis
-
-### **Three Debate Modes**
-- **AI vs AI**: Watch sophisticated AI arguments unfold in real-time
-- **AI vs User**: Practice and improve your debate skills against AI opponents
-- **User vs User**: Human debates with AI moderation and analysis
-
-### **Multiple Debate Formats**
-- **Default Format**: Standard academic debate structure
-- **Public Forum**: Accessible format focused on current events with cross-examinations
-- **Lincoln-Douglas**: Value-based philosophical argumentation
-
-### **AI Personae**
-- **Default AI**: Standard debate style
-- **Donald Trump**: Bold, confident, superlatives-focused rhetoric
-- **Kamala Harris**: Prosecutorial, structured, evidence-based argumentation
-- **Elon Musk**: Analytical, first-principles, technical approach
-- **Drake**: Smooth, introspective, authentic Toronto style
-
-Each persona uses custom-engineered prompts that inject unique speaking patterns, vocabulary, and rhetorical styles.
-
-### **AI-Powered Judging**
-- **Objective Evaluation**: Bias-neutral assessment across multiple criteria
-- **Detailed Feedback**: Actionable insights for improvement with specific examples
-- **Multi-Model Consensus**: Enhanced accuracy through model diversity
-- **Winner Determination**: Clear rationale for debate outcomes
-
-### **Voice Integration**
-- **Speech-to-Text**: Real-time voice input during debates using Web Speech API
-- **Text-to-Speech**: AI-generated audio responses with Google Cloud TTS
-- **Context-Aware Voices**: Speaker-specific voice selection
-- **Live Transcription**: See your speech transcribed in real-time
-- **Browser-Native**: No app downloads required (Chrome/Edge/Brave support)
-
-### **Transcript Management**
-- **Auto-Save**: Automatic saving to Firebase Firestore
-- **History**: View all past debates with filtering and sorting
-- **Public Sharing**: Generate shareable links with read-only access
-- **PDF Export**: Professional transcript formatting with judge feedback
-- **Metadata Tracking**: Complete debate details (mode, model, timestamp, participants)
-
-### **Advanced Search & Discovery**
-- **Fuzzy Matching**: Smart search with typo tolerance using rapidfuzz
-- **Synonym Expansion**: Broad search coverage with related terms
-- **Popular Terms Database**: Quick access to trending topics
-- **Intelligent Caching**: 30-minute TTL for search results to reduce API calls
-- **Multi-Source Search**: Unified interface for federal, state, and proposition searches
-
----
-
-## **Tech Stack**
-
-### Backend Technologies
-- **FastAPI** - High-performance async web framework with 30+ API endpoints
-- **LangChain** - AI model orchestration and prompt management
-- **Custom OpenRouterChat** - Custom LangChain class for OpenRouter API integration
-- **OpenRouter** - Multi-provider AI model gateway (GPT-4o, Claude, Gemini, LLaMA)
-- **PDFMiner & PDFPlumber** - Advanced PDF text extraction
-- **Congress.gov API** - Real-time federal legislative data
-- **LegiScan API** - State bills from all 50 US states
-- **Google Cloud Speech-to-Text** - High-accuracy voice recognition
-- **Google Cloud Text-to-Speech** - Natural-sounding AI voices
-- **Cachetools** - TTL-based intelligent caching
-- **Firebase Admin** - Authentication and database management
-- **Sentence Transformers** - Text embeddings for semantic search
-- **RapidFuzz** - Fuzzy string matching for search
-
-### Frontend Technologies
-- **React 18** - Modern hooks-based UI development
-- **Firebase** - Google OAuth authentication and Firestore database
-- **Vite** - Lightning-fast build tooling and development server
-- **Axios** - Promise-based HTTP client with 120s timeout
-- **React Router** - Client-side routing
-- **React Markdown** - GitHub-flavored markdown rendering
-- **jsPDF & html2pdf.js** - Professional PDF generation
-- **LangChain.js** - Frontend LangChain integration
-- **Lucide React** - Icon library
-- **Bootstrap 5** - UI framework and styling
-
-### External Services & APIs
-- **OpenRouter** - Access to 4+ AI model providers
-- **Congress.gov** - Federal legislative data
-- **LegiScan** - State legislative data (all 50 states)
-- **CA Secretary of State** - California ballot propositions
-- **Google Cloud Platform** - Speech-to-Text and Text-to-Speech
-- **Firebase** - Authentication, Firestore, Analytics
-
-### Performance Metrics
-- **30+ API endpoints** for comprehensive functionality
-- **Multi-layer caching** with 30-min to 24-hour TTL
-- **40,000+ character** document processing capability
-- **Real-time** Congressional and state legislative data integration
-- **Multi-model fallback** architecture for 99%+ uptime
-- **120-second timeout** for complex AI operations
-- **Async/await patterns** throughout for optimal performance
-
----
-
-## **Architecture Overview**
-
-### System Architecture
-```
-User Interface (React 18)
-    ↓
-Frontend API Client (Axios)
-    ↓
-FastAPI Backend (:8000)
-    ↓
-┌─────────────────┬──────────────────┬────────────────┐
-│   LangChain     │   Legislative    │     Voice      │
-│   Chains        │   APIs           │   Services     │
-├─────────────────┼──────────────────┼────────────────┤
-│ Debater Chain   │ Congress.gov     │ Google STT     │
-│ Judge Chain     │ LegiScan         │ Google TTS     │
-│ OpenRouterChat  │ CA SOS           │ Web Speech API │
-└─────────────────┴──────────────────┴────────────────┘
-    ↓
-AI Model Providers (OpenRouter Gateway)
-    ↓
-GPT-4o | Claude 3.5 | Gemini 2.0 | LLaMA 3.3
+```text
+Choose a topic and side
+        ↓
+Make an argument by voice or text
+        ↓
+AI opponent generates a contextual response
+        ↓
+AI coach diagnoses the specific speech
+        ↓
+Revise, rebut, and continue
+        ↓
+AI judge explains the result and next steps
 ```
 
-### Key Components
-- **28 React Components**: Modular UI with clear separation of concerns
-- **Custom LangChain Classes**: `OpenRouterChat` for seamless OpenRouter integration
-- **Multi-Source Bill Search**: Unified search across federal, state, and proposition databases
-- **Intelligent Caching Layer**: Multiple TTL strategies for different data types
-- **Firebase Integration**: Secure authentication and persistent transcript storage
+## How it works
 
----
+### 1. Deliberate practice with the Debate Trainer
 
-## **Quick Start**
+The trainer follows a Public Forum progression—Constructive, Rebuttal, Summary, and Final Focus—rather than returning generic writing advice. Its coaching changes with the purpose of each speech:
 
-### Try the Platform
-1. **Visit**: [debatesim.us](https://debatesim.us)
-2. **Sign Up**: Create account with Google authentication
-3. **Choose Mode**: Select AI vs AI, AI vs User, or User vs User
-4. **Pick Format**: Default, Public Forum, or Lincoln-Douglas
-5. **Select Persona**: Choose AI debate style (optional)
-6. **Start Debating**: Enter topic or select legislation to debate
-7. **Use Voice Input**: Click microphone button to speak your arguments (optional)
-8. **Get Judged**: Receive comprehensive AI feedback and scoring
+- Constructives are checked for case structure, evidence, warrants, internal links, and impacts.
+- Rebuttals are checked for direct clash, coverage, refutation, and evidence comparison.
+- Summaries are checked for strategic collapse, extensions, frontlines, and weighing.
+- Final Focus speeches are checked for crystallization, voters, comparative weighing, and consistency.
 
-### For Developers
-```bash
-# API Quick Start - Generate Debate Response
-curl -X POST "http://localhost:8000/generate-response" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "debater": "Pro AI",
-    "prompt": "AI safety is critical for society",
-    "model": "openai/gpt-4o",
-    "debate_format": "default",
-    "persona": "default"
-  }'
+Feedback identifies exact inefficient passages, recommends cuts or shorter rewrites, estimates words saved, and gives actionable improvements. This lets students apply advice in the next speech—not someday after the round is over.
 
-# Search Congressional Bills
-curl -X POST "http://localhost:8000/search-bills" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "query": "climate change",
-    "limit": 10
-  }'
+### 2. An always-available AI opponent
 
-# Analyze Legislation
-curl -X POST "http://localhost:8000/analyze-legislation-text" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "text": "Your bill text here...",
-    "model": "openai/gpt-4o"
-  }'
+Learners can practice **AI vs User**, observe **AI vs AI**, or run **User vs User** debates. The AI receives the topic, side, debate format, speech context, and prior transcript so its next response engages with the evolving round. Supported formats include standard debate, Public Forum, and Lincoln-Douglas.
+
+### 3. Explainable AI judging
+
+At the end of a debate, a separate judging chain evaluates the complete transcript and provides a decision with reasoning and improvement feedback. Separating the opponent, coach, and judge roles keeps each AI task focused and turns a debate into a complete practice-and-reflection cycle.
+
+### 4. Real policy as learning material
+
+Students can search and analyze current federal legislation through Congress.gov, state legislation through LegiScan, California ballot propositions, or an uploaded document. DebateSim can extract long bill text and analyze it across six lenses:
+
+1. Economic impact
+2. Public benefit
+3. Implementation feasibility
+4. Constitutional concerns
+5. Political viability
+6. Democratic impact
+
+This bridges “learning about government” and actually reasoning about policy. After understanding a measure, the learner can debate its tradeoffs from more than one perspective.
+
+### 5. Accessible, reusable practice
+
+- Voice input supports learners who communicate better by speaking than typing.
+- Text-to-speech can read AI responses aloud.
+- English and Chinese preferences are supported in the training experience.
+- Firebase authentication and Firestore-backed history preserve debates for later reflection.
+- Transcripts can be shared through read-only links or exported as PDFs with judge feedback.
+- Guest access lowers the barrier to trying the platform.
+
+## Why AI is essential—not an add-on
+
+A static lesson can explain what a rebuttal is, but it cannot listen to a new argument, challenge its assumptions, adapt the next speech, and point to the learner's exact wording. DebateSim uses language models at every stage of that interaction:
+
+| AI role | Input | Educational output |
+|---|---|---|
+| Opponent | Topic, side, format, persona, and debate history | A context-aware argument or rebuttal that forces the learner to adapt |
+| Coach | Student speech, round, speech type, and language | Targeted diagnosis, precise cuts, rewrites, and next-step improvements |
+| Judge | Full transcript and debate context | An explainable decision and holistic performance feedback |
+| Policy analyst | Bill text or selected sections | A structured, multi-dimensional explanation of complex legislation |
+
+DebateSim routes requests through OpenRouter and supports models from multiple providers. Purpose-built LangChain prompt chains constrain each model to its educational role, while fallback models and request handling improve reliability. AI is not used to complete the learning task for the student; it creates the responsive practice environment in which the student performs the task.
+
+## Competition rubric alignment
+
+### Educational Impact — 25 points
+
+**Real problem:** high-quality debate practice depends on scarce people, time, and expertise, while complex civic material is difficult for new learners to enter.
+
+**Our response:** DebateSim makes structured practice available at any time, provides feedback after each student speech, encourages learners to confront opposing viewpoints, and connects argument skills to authentic legislation. The tool supports a repeatable cycle of attempt, feedback, revision, and reflection rather than passive content consumption.
+
+### Creative Use of AI/ML — 25 points
+
+AI performs four distinct, coordinated educational roles: opponent, coach, judge, and legislative analyst. Prompts adapt to format and round type; responses use the accumulated debate context; coaching quotes and rewrites the learner's own language; and different models can be selected or used as fallbacks. Without AI, the personalized interaction at the center of DebateSim would not exist.
+
+### Technical Education / Execution — 25 points
+
+The project is a working full-stack application with a React/Vite interface, FastAPI backend, modular AI chains, Firebase authentication and persistence, external legislative-data integrations, PDF text extraction, voice input/output, caching, error handling, and automated backend tests. Guided setup screens, clear round labels, live loading states, transcript navigation, history, sharing, and export are designed to keep the experience understandable from first argument to final feedback.
+
+### Pitch & Demo — 25 points
+
+The two-minute demo below is organized around one learner story: a student who needs practice, receives immediate personalized coaching, and applies those skills to a real civic issue. It shows the problem, the core AI learning loop, the technical differentiator, and the educational outcome without turning the pitch into a feature list.
+
+## Two-minute demo plan
+
+> **Submission video:** Add the final public video URL here before submitting.
+
+| Time | Screen | Narration goal |
+|---|---|---|
+| 0:00–0:15 | Title, then a quick view of the trainer | “Debate is one of the best ways to learn critical thinking—but practice normally requires an opponent, coach, and judge. DebateSim gives every student all three.” |
+| 0:15–0:35 | Select AI vs User, Public Forum, a topic, and a side | Show that a complete practice session can begin in seconds and that the learner controls the position they practice. |
+| 0:35–1:00 | Speak or type a short student argument; show the AI rebuttal | Explain that the opponent uses the topic, format, side, round, and conversation history to respond to this learner—not to a canned exercise. |
+| 1:00–1:20 | Open the speech feedback panel; highlight an exact cut/rewrite | Show how feedback changes by speech type and can be used immediately in the next round. |
+| 1:20–1:38 | Show final judging and transcript/history | Complete the learning loop: perform, receive an explainable evaluation, reflect, and practice again. |
+| 1:38–1:52 | Search or open a real bill; show the six-part analysis | Connect debate skill to civic understanding and authentic source material. |
+| 1:52–2:00 | Architecture graphic or model selector, then URL and repository | “AI is the opponent, coach, judge, and policy analyst at the core of DebateSim. Try it at debatesim.us.” |
+
+Recording tip: preload the topic and bill, use a short prepared speech, and record completed AI responses so network latency does not consume demo time.
+
+## Architecture
+
+```text
+React 18 + Vite
+  ├── Debate setup, trainer, transcript, judge, legislation, history
+  ├── Browser speech recognition and text-to-speech controls
+  └── Firebase Auth / Firestore
+                │ HTTPS / JSON
+                ▼
+FastAPI
+  ├── Debater chain ───────┐
+  ├── Trainer chain ───────┼── OpenRouter ── multiple LLM providers
+  ├── Judge chain ─────────┘
+  ├── PDF/text extraction
+  ├── Congress.gov, LegiScan, and CA proposition services
+  └── TTL caching and fallback handling
 ```
 
-**Complete API documentation with examples**: [API Reference Guide](docs/API_REFERENCE.md)
+### Technology stack
 
----
+- **Frontend:** React 18, Vite, React Router, Axios, Bootstrap, Firebase, jsPDF/html2pdf.js
+- **Backend:** Python, FastAPI, Pydantic, LangChain, OpenAI-compatible OpenRouter client
+- **AI/ML:** multi-model LLM orchestration, task-specific prompt chains, sentence-transformer support, fuzzy search
+- **Data and media:** Congress.gov, LegiScan, California propositions, PDFMiner/pdfplumber, Web Speech API, Google Cloud TTS
+- **Quality:** Pytest, ESLint, typed request models, CORS configuration, caching, async endpoints
 
-## **Installation & Development**
+## Run locally
 
 ### Prerequisites
-- **Python 3.9+** for backend
-- **Node.js 18+** for frontend
-- **API Keys**: OpenRouter (required), Congress.gov (optional), LegiScan (optional)
-- **Google Cloud Account** (optional, for TTS/STT features)
 
-### Local Development Setup
+- Python 3.9+
+- Node.js 18+
+- An [OpenRouter](https://openrouter.ai/) API key
+- A Firebase web project for authentication
+- Optional: Congress.gov, LegiScan, and Google Cloud credentials for their respective features
+
+### 1. Backend
+
 ```bash
-# Clone repository
-git clone https://github.com/alexliao95311/DebateSim.git
-cd DebateSim
+git clone https://github.com/alexliao95311/PromethusAIChallenge.git
+cd PromethusAIChallenge
 
-# Backend setup
+python -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # Add your API keys
+cp .env.example .env
+```
 
-# Start backend server (runs on http://localhost:8000)
+Add at least `OPENROUTER_API_KEY` to `.env`, then start the API:
+
+```bash
 python main.py
+```
 
-# Frontend setup (new terminal)
+The backend runs at `http://localhost:8000`.
+
+### 2. Frontend
+
+Create `frontend/.env`:
+
+```env
+VITE_API_URL=http://localhost:8000
+VITE_FIREBASE_API_KEY=your_value
+VITE_FIREBASE_AUTH_DOMAIN=your_value
+VITE_FIREBASE_PROJECT_ID=your_value
+VITE_FIREBASE_STORAGE_BUCKET=your_value
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_value
+VITE_FIREBASE_APP_ID=your_value
+VITE_FIREBASE_MEASUREMENT_ID=your_value
+```
+
+Then install and run the client:
+
+```bash
 cd frontend
 npm install
-npm run dev  # Runs on http://localhost:5173
+npm run dev
 ```
 
-### Environment Variables
+Open `http://localhost:5173`.
+
+### Optional service keys
+
+Set these in the root `.env` only when using the related feature:
+
 ```env
-# Required
-OPENROUTER_API_KEY=your_openrouter_key
-FIREBASE_CONFIG=your_firebase_config
-
-# Optional - Legislative Data
-CONGRESS_API_KEY=your_congress_key
-LEGISCAN_API_KEY=your_legiscan_key
-
-# Optional - Voice Features
-GOOGLE_CLOUD_PROJECT_ID=your_project_id
-GOOGLE_APPLICATION_CREDENTIALS=path/to/credentials.json
-
-# Frontend
-VITE_API_URL=http://localhost:8000
-VITE_FIREBASE_CONFIG=your_firebase_config
-
-# Backend CORS
-BACKEND_ORIGINS=http://localhost:5173,http://localhost:3000
+CONGRESS_API_KEY=your_value
+LEGISCAN_API_KEY=your_value
+GOOGLE_CLOUD_PROJECT_ID=your_value
+GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json
+BACKEND_ORIGINS=http://localhost:5173
 ```
 
-### Testing
+Never commit `.env` files or service-account credentials.
+
+## Test and build
+
 ```bash
-# Backend tests
-python -m pytest
+# Backend model and repository tests
+python -m pytest tests -v
 
-# Frontend tests
+# Frontend quality checks
 cd frontend
-npm test
-
-# Voice features test
-cd speech_utils
-python3 test_v2t.py
+npm run lint
+npm run build
 ```
 
----
+## Repository guide
 
-## **Voice-to-Text Integration**
-
-**Real-time speech recognition** is now available in the [`speech_utils/`](speech_utils/) folder:
-
-- **[Speech Utilities README](speech_utils/README.md)** - Complete setup and usage guide
-- **Google Cloud Speech-to-Text** - High-accuracy real-time transcription
-- **Easy Integration** - Simple API for adding voice input to debates
-- **Testing Tools** - Comprehensive test suite and examples
-
-*Quick test: `cd speech_utils && python3 test_v2t.py`*
-
-### **Frontend Voice Input**
-
-**Browser-based speech recognition** is now integrated into the debate interface:
-
-- **🎤 Voice Input Component** - Real-time speech-to-text in debates
-- **AI vs User Mode** - Speak your arguments instead of typing
-- **User vs User Mode** - Voice input for both debaters
-- **Chrome/Edge Support** - Uses Web Speech API for browser compatibility
-- **Live Transcription** - See your speech transcribed in real-time
-
-*Available in all debate modes with microphone access*
-
----
-
-## **Project Structure**
-
-```
+```text
 DebateSim/
-├── frontend/                      # React 18 application
-│   ├── src/
-│   │   ├── components/           # 28 React components
-│   │   │   ├── Debate.jsx       # Main debate interface (2,747 lines)
-│   │   │   ├── Legislation.jsx  # Bill analysis & selection
-│   │   │   ├── Judge.jsx        # Judging interface
-│   │   │   ├── DebateSim.jsx    # Debate setup wizard
-│   │   │   ├── Home.jsx         # Landing page
-│   │   │   ├── History.jsx      # Transcript history
-│   │   │   ├── EnhancedVoiceOutput.jsx  # TTS component
-│   │   │   ├── VoiceInput.jsx   # Speech-to-text
-│   │   │   └── [20+ more]
-│   │   ├── services/            # Service layer
-│   │   ├── firebase/            # Firebase integration
-│   │   ├── utils/               # Utility functions
-│   │   └── api.js               # Axios API client
-│   └── package.json
-│
-├── chains/                       # LangChain prompt chains
-│   ├── debater_chain.py         # Debate generation (969 lines)
-│   └── judge_chain.py           # AI judging engine
-│
-├── main.py                       # FastAPI backend (2,287 lines, 30+ endpoints)
-│
-├── Support Services
-│   ├── billsearch.py            # Congress.gov integration
-│   ├── legiscan_service.py      # State bills (all 50 states)
-│   ├── ca_propositions_service.py  # CA ballot measures
-│   └── speech_utils/            # Voice features
-│
-├── Documentation
-│   ├── docs/                    # Technical reports
-│   ├── API_DOCUMENTATION.md
-│   ├── STATE_BILLS_SUMMARY.md
-│   └── CA_PROPOSITIONS_FRONTEND.md
-│
-├── requirements.txt             # 54 Python dependencies
-└── .env                        # Configuration
+├── main.py                     # FastAPI application and API endpoints
+├── chains/
+│   ├── debater_chain.py        # Contextual AI opponent
+│   ├── trainer_chain.py        # Round- and speech-specific coaching
+│   └── judge_chain.py          # Debate evaluation
+├── billsearch.py               # Congress.gov discovery
+├── legiscan_service.py         # State legislation
+├── ca_propositions_service.py  # California ballot measures
+├── speech_utils/               # Speech and voice services
+├── models/ and services/       # Data models and persistence layer
+├── frontend/src/               # React application
+├── tests/                      # Backend tests and Firestore fake
+└── docs/                       # Architecture, APIs, setup, and reports
 ```
 
----
+For deeper technical detail, see the [project report](docs/PROJECT_REPORT.md), [API reference](docs/API_REFERENCE.md), and [documentation hub](docs/README.md).
 
-## **Unique Features & Innovation**
+## Responsible use and limitations
 
-### Multi-Model Fallback Architecture
-Unlike most debate platforms that rely on a single AI provider, DebateSim supports simultaneous access to 4+ providers with automatic fallback:
-- OpenAI (GPT-4o, GPT-4o-mini, search-preview)
-- Anthropic (Claude 3.5 Sonnet)
-- Google (Gemini 2.0 Flash)
-- Meta (LLaMA 3.3 70B)
+DebateSim is a practice and learning tool. AI responses can contain errors, invented claims, or bias, and a confident argument is not necessarily a factual one. Legislative analyses are educational summaries, not legal advice. Learners should verify important claims against primary sources, and educators should treat AI judging as formative feedback rather than an authoritative tournament ballot.
 
-Users can choose different models for debaters vs judges, and the system automatically falls back to secondary models if the primary fails.
+The platform keeps the learner in control: users choose the topic and side, contribute their own speeches, can inspect the complete transcript, and decide whether to accept or reject the AI's feedback.
 
-### Comprehensive Legislative Coverage
-Three distinct legislative data sources in one platform:
-1. **Federal Bills** (Congress.gov) - 119th Congress with real-time updates
-2. **State Bills** (LegiScan) - All 50 states with multiple legislative sessions
-3. **California Propositions** (SOS) - Ballot measures with voter guide integration
+## Submission checklist
 
-### Persona-Based Style Injection
-Goes beyond simple style transfer with full rhetorical pattern adoption:
-- Custom vocabulary and phrase patterns
-- Argumentation structure preferences
-- Reference and citation styles
-- Emotional tone calibration
-- Character-specific speech patterns
+- [x] Functional educational AI application
+- [x] Public source-code repository
+- [x] Live application
+- [ ] Add the final public two-minute demo video link to this README
+- [ ] Verify all links and demo credentials in a clean browser session
+- [ ] Record using the timed plan above and keep the final cut at or under two minutes
 
-### 6-Criteria AI Grading Rubric
-More comprehensive than typical pass/fail analysis:
-1. **Economic Impact** - Fiscal analysis and budget implications
-2. **Public Benefit** - Social benefit and community impact
-3. **Implementation Feasibility** - Practical execution challenges
-4. **Constitutional Concerns** - Legal and constitutional issues
-5. **Political Viability** - Likelihood of passage and support
-6. **Democratic Impact** - Effects on democratic processes
+## License
 
-### Real-Time Voice Integration
-Rare in debate platforms - fully browser-native:
-- Live speech-to-text during debates
-- Optional voice output for AI responses
-- No app downloads required
-- Dual-language support potential
-
----
-
-## **Use Cases**
-
-### Education
-- **High Schools**: Debate team practice and skill development
-- **Universities**: Political science and rhetoric courses
-- **Mock Trials**: Legal argument practice
-- **Civic Education**: Understanding legislative processes
-
-### Research
-- **Policy Analysis**: Quick evaluation of legislative proposals
-- **Public Opinion**: Understanding different perspectives
-- **Argumentation Studies**: Analysis of debate techniques
-- **AI Ethics**: Studying AI-human interaction patterns
-
-### Professional
-- **Legislative Staff**: Bill impact analysis
-- **Policy Advocates**: Argument development
-- **Journalists**: Understanding complex legislation
-- **Legal Professionals**: Case argument practice
-
-### Personal Development
-- **Critical Thinking**: Improve analytical skills
-- **Public Speaking**: Practice articulation
-- **Civic Engagement**: Understand current legislation
-- **Opinion Formation**: Explore multiple viewpoints
-
----
-
-## **Contributing**
-
-We welcome contributions! Whether you're fixing bugs, adding features, or improving documentation:
-
-1. **Fork** the repository
-2. **Create** feature branch: `git checkout -b feature/amazing-feature`
-3. **Commit** changes: `git commit -m 'Add amazing feature'`
-4. **Push** branch: `git push origin feature/amazing-feature`
-5. **Open** Pull Request
-
-### Areas for Contribution
-- **AI Integration**: New model providers, prompt improvements, or persona development
-- **Data Sources**: Additional legislative APIs, international bills, or document parsers
-- **UI/UX**: Frontend improvements, accessibility features, or mobile optimization
-- **Documentation**: Tutorials, examples, translations, or video guides
-- **Testing**: Unit tests, integration tests, or performance benchmarks
-- **Features**: New debate formats, analysis tools, or export options
-
-*Contribution guidelines: [Technical Report - Future Improvements](docs/PROJECT_REPORT.md#future-improvements-and-scalability)*
-
----
-
-## **Impact & Ethics**
-
-DebateSim is designed with responsible AI principles at its core:
-
-### **Educational Impact**
-- **Improved legislative understanding** through accessible analysis tools
-- **Enhanced critical thinking** through structured argumentation
-- **Global accessibility** to quality debate education
-- **Scalable learning** - unlimited simultaneous users
-- **Diverse perspectives** exposure through AI-moderated discourse
-
-### **Ethical AI Implementation**
-- **Multi-model approach** reduces single-point-of-bias
-- **Transparent attribution** of AI-generated content
-- **Evidence-based requirements** for all arguments
-- **Human oversight** capabilities throughout
-- **Privacy-focused** - minimal data collection
-- **Open documentation** of AI techniques and limitations
-
-### **Democratic Values**
-- **Civic engagement** through accessible legislative analysis
-- **Informed participation** in democratic processes
-- **Critical media literacy** development
-- **Balanced perspectives** presentation
-- **Fact-based discourse** encouragement
-
-*Complete ethical analysis: [Technical Report - Ethical Considerations](docs/PROJECT_REPORT.md#ethical-considerations)*
-
----
-
-## **Code Metrics**
-
-| Metric | Count |
-|--------|-------|
-| Frontend Components | 28 |
-| Backend API Endpoints | 30+ |
-| Python Dependencies | 54 |
-| Main Backend Lines | 2,287 |
-| Debate Component Lines | 2,747 |
-| Debater Chain Lines | 969 |
-| Supported Debate Formats | 3 |
-| AI Personae | 5 |
-| AI Model Providers | 4+ |
-| Legislative Data Sources | 3 |
-| Supported US States | 50 |
-| Documentation Files | 15+ |
-
----
-
-## **Acknowledgments**
-
-- **OpenRouter** for providing access to multiple AI model providers
-- **Congress.gov** for comprehensive federal legislative data access
-- **LegiScan** for state legislative data across all 50 states
-- **Google Cloud** for Speech-to-Text and Text-to-Speech services
-- **Firebase** for authentication and database infrastructure
-- **The open-source community** for invaluable tools and libraries
-- **Contributors and beta testers** who helped shape the platform
-- **Educational institutions** providing feedback and validation
-
----
-
-## **Support and Resources**
-
-- **Live Demo**: [debatesim.us](https://debatesim.us)
-- **Technical Documentation**: [Complete Project Report](docs/PROJECT_REPORT.md)
-- **API Documentation**: [Developer Reference Guide](docs/API_REFERENCE.md)
-- **Documentation Hub**: [Navigation Guide for All Users](docs/README.md)
-- **GitHub Issues**: [Report bugs or request features](https://github.com/alexliao95311/DebateSim/issues)
-- **Setup Guide**: [Development and deployment instructions](Instructions.md)
-
----
-
-## **Future Roadmap**
-
-### Planned Features
-- **Mobile App**: Native iOS and Android applications
-- **International Bills**: Legislative data from other countries
-- **Tournament Mode**: Structured multi-round competitions
-- **Advanced Analytics**: Performance tracking and improvement metrics
-- **Custom Prompts**: User-defined debate rules and formats
-- **Video Debates**: Integration with video conferencing
-- **Real-Time Collaboration**: Multiple users in same debate
-- **Blockchain Verification**: Immutable transcript records
-
-### Technical Improvements
-- **Model Fine-Tuning**: Custom models trained on debate data
-- **Enhanced Caching**: Redis-based distributed caching
-- **GraphQL API**: More flexible data querying
-- **WebSocket Support**: Real-time updates without polling
-- **Kubernetes Deployment**: Scalable container orchestration
-- **Enhanced Security**: Additional authentication methods
-
-*See [Technical Report](docs/PROJECT_REPORT.md#future-improvements-and-scalability) for detailed roadmap*
+Released under the [MIT License](LICENSE).
 
 ---
 
 <div align="center">
 
-**Built with care for the debate and education community**
-
-*Empowering critical thinking through AI-powered discourse*
-
-**License**: MIT | **Version**: 1.0.0 | **Last Updated**: January 2025
+**DebateSim turns AI from an answer machine into a practice partner.**
 
 </div>
