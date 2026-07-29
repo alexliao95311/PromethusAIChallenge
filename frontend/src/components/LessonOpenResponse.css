@@ -1,5 +1,5 @@
 .open-response-container {
-  max-width: 700px;
+  max-width: var(--lm-content-max);
   margin: 0 auto;
   padding: 1.5rem;
   color: #f8fafc;
@@ -23,6 +23,8 @@
 }
 
 .open-response-question-card {
+  max-width: 760px;
+  margin: 0 auto;
   background: rgba(30, 41, 59, 0.6);
   border: 1px solid rgba(51, 65, 85, 0.5);
   border-radius: 12px;

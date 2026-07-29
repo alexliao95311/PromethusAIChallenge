@@ -12,13 +12,15 @@ function LessonReflectionPage() {
   const { lessonId } = useParams();
 
   return (
-    <div className="lesson-subpage">
+    <div className="lesson-subpage lesson-scope">
       <Link to={`/lesson/${lessonId}`} className="lesson-subpage-back-link">
         <ArrowLeft size={18} />
         <span>Back to Lesson</span>
       </Link>
-      <LessonFlowProgress lessonId={lessonId} currentStepKey="reflection" />
-      <LessonModeNav lessonId={lessonId} />
+      <div className="lm-sticky-header">
+        <LessonFlowProgress lessonId={lessonId} currentStepKey="reflection" />
+        <LessonModeNav lessonId={lessonId} />
+      </div>
       <LessonReflection lessonId={lessonId} />
       <LessonFlowNextButton lessonId={lessonId} currentStepKey="reflection" />
       <Link to="/lesson/reflection-progress" className="lesson-subpage-back-link">

@@ -1,0 +1,62 @@
+/* Shared Lesson Mode design tokens + utility classes.
+   No CSS scoping in this app (Vite + plain global CSS) -- any class shared
+   across more than one Lesson Mode file must live here with an `lm-` prefix.
+   Page-specific classes keep their own per-component prefix
+   (lesson-overview-*, mastery-*, debate-persona-*, etc). This convention
+   exists because a bare class-name collision between MasteryDashboard.css
+   and LessonFlashcards.css previously leaked a `position: absolute` rule
+   across components. */
+
+:root {
+  --lm-bg: #0f172a;
+  --lm-panel-bg: rgba(30, 41, 59, 0.6);
+  --lm-panel-bg-soft: rgba(30, 41, 59, 0.5);
+  --lm-panel-border: rgba(51, 65, 85, 0.6);
+  --lm-panel-border-soft: rgba(51, 65, 85, 0.5);
+  --lm-input-bg: rgba(15, 23, 42, 0.6);
+
+  --lm-text-primary: #f8fafc;
+  --lm-text-secondary: #cbd5e1;
+  --lm-text-muted: #94a3b8;
+  --lm-text-faint: #64748b;
+
+  --lm-accent: #4a90e2;
+  --lm-accent-hover: #3a7bc8;
+  --lm-accent-bg: rgba(74, 144, 226, 0.15);
+  --lm-accent-border: rgba(74, 144, 226, 0.4);
+  --lm-accent-text: #93c5fd;
+
+  --lm-success: #34d399;
+  --lm-success-text: #6ee7b7;
+  --lm-error: #f87171;
+  --lm-error-text: #fca5a5;
+  --lm-warn: #fbbf24;
+  --lm-warn-text: #fcd34d;
+
+  --lm-content-max: 1100px;
+}
+
+/* Escape hatch for the leaked legacy `h1,h2,h3{color:var(--primary-color)}`
+   rule in index.css -- apply on any Lesson Mode page's outer wrapper so
+   future headings fall back to the right color even without an explicit
+   per-class declaration. */
+.lesson-scope h1,
+.lesson-scope h2,
+.lesson-scope h3,
+.lesson-scope h4 {
+  color: inherit;
+}
+
+.lm-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--lm-bg);
+  padding: 0.75rem 0 0.25rem;
+}
+
+.lm-scroll-panel {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}

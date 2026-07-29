@@ -9,7 +9,7 @@ import './LessonPersona.css';
 // Non-goals), so this route exists purely to host PersonaBuilder for now.
 function LessonPersona({ user }) {
   return (
-    <div className="lesson-persona-page">
+    <div className="lesson-persona-page lesson-scope">
       <Link to="/" className="lesson-persona-back-link">
         <ArrowLeft size={18} />
         <span>Back to Home</span>

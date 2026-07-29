@@ -29,7 +29,7 @@ function LessonReflectionProgress() {
   }, []);
 
   return (
-    <div className="lesson-subpage">
+    <div className="lesson-subpage lesson-scope">
       <Link to="/lesson" className="lesson-subpage-back-link">
         <ArrowLeft size={18} />
         <span>Back to Lesson Mode</span>

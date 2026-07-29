@@ -82,14 +82,16 @@ function LessonOverview() {
   if (!lesson) return null;
 
   return (
-    <div className="lesson-overview-page">
+    <div className="lesson-overview-page lesson-scope">
       <Link to="/lesson" className="lesson-overview-back-link">
         <ArrowLeft size={18} />
         <span>Back to Lesson Mode</span>
       </Link>
 
-      <LessonFlowProgress lessonId={lessonId} currentStepKey="lesson" />
-      <LessonModeNav lessonId={lessonId} />
+      <div className="lm-sticky-header">
+        <LessonFlowProgress lessonId={lessonId} currentStepKey="lesson" />
+        <LessonModeNav lessonId={lessonId} />
+      </div>
 
       <div className="lesson-overview-card">
         <h1 className="lesson-overview-title" data-testid="lesson-overview-title">
@@ -108,14 +110,16 @@ function LessonOverview() {
           </div>
         )}
 
-        <div className="lesson-overview-section">
-          <h2>Major provisions</h2>
-          <GroundedClaimList items={lesson.major_provisions} testId="lesson-overview-provisions" />
-        </div>
+        <div className="lesson-overview-provisions-stakeholders">
+          <div className="lesson-overview-section">
+            <h2>Major provisions</h2>
+            <GroundedClaimList items={lesson.major_provisions} testId="lesson-overview-provisions" />
+          </div>
 
-        <div className="lesson-overview-section">
-          <h2>Stakeholders</h2>
-          <GroundedClaimList items={lesson.stakeholders} testId="lesson-overview-stakeholders" />
+          <div className="lesson-overview-section">
+            <h2>Stakeholders</h2>
+            <GroundedClaimList items={lesson.stakeholders} testId="lesson-overview-stakeholders" />
+          </div>
         </div>
 
         <div className="lesson-overview-pro-con">

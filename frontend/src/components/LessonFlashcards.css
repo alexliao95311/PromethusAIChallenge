@@ -1,9 +1,22 @@
 .lesson-flashcards-container {
-  max-width: 640px;
+  max-width: var(--lm-content-max);
   margin: 0 auto;
   padding: 1.5rem;
   color: #f8fafc;
   font-family: inherit;
+}
+
+/* Flashcard-review classes below are unprefixed and predate the `lm-`
+   naming convention documented in LessonTheme.css -- do not reuse these
+   bare names (mastery-bar-*, flashcard-*) in other Lesson Mode files;
+   that's exactly what caused the MasteryDashboard collision this
+   convention exists to prevent. */
+.flashcards-summary,
+.flashcard-review-card-perspective,
+.flashcards-complete {
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .lesson-flashcards-error {
