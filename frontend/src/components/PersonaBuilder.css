@@ -1,5 +1,5 @@
 .persona-builder {
-  max-width: 640px;
+  max-width: 800px;
   margin: 0 auto;
   padding: 1.5rem;
   color: #f8fafc;
@@ -10,6 +10,7 @@
   font-size: 1.4rem;
   font-weight: 700;
   margin: 0 0 0.5rem;
+  color: var(--lm-text-primary);
 }
 
 .persona-intro {
@@ -124,7 +125,7 @@
 
 .persona-save-btn {
   background: #4a90e2;
-  color: #fff;
+  color: var(--lm-text-primary);
 }
 
 .persona-save-btn:not(:disabled):hover {

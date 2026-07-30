@@ -1,5 +1,5 @@
 .mastery-dashboard {
-  max-width: 960px;
+  max-width: var(--lm-content-max);
   margin: 0 auto;
   padding: 1.5rem;
   color: #f8fafc;
@@ -9,6 +9,7 @@
 .mastery-dashboard-title {
   font-size: 1.6rem;
   margin: 0 0 1.25rem 0;
+  color: var(--lm-text-primary);
 }
 
 .mastery-dashboard-error {
@@ -166,7 +167,7 @@
 
 .mastery-lesson-list {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1rem;
 }
 

@@ -50,7 +50,7 @@ function LessonHub() {
   };
 
   return (
-    <div className="lesson-hub-page">
+    <div className="lesson-hub-page lesson-scope">
       <Link to="/" className="lesson-hub-back-link">
         <ArrowLeft size={18} />
         <span>Back to Home</span>

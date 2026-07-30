@@ -183,41 +183,43 @@ function MasteryDashboard() {
 
           <section className="mastery-section">
             <h2 className="mastery-section-title">Progress by Bill</h2>
-            <div className="mastery-lesson-list" data-testid="mastery-lesson-list" ref={lessonListRef}>
-              {lessons.map((lesson) => (
-                <div key={lesson.lesson_id} className="mastery-lesson-card" data-testid={`mastery-lesson-${lesson.lesson_id}`}>
-                  <div className="mastery-lesson-head">
-                    <h3 className="mastery-lesson-title">{lesson.lesson_title}</h3>
-                    {lesson.completed && <span className="mastery-completed-badge">Completed</span>}
-                  </div>
+            <div className="lm-scroll-panel">
+              <div className="mastery-lesson-list" data-testid="mastery-lesson-list" ref={lessonListRef}>
+                {lessons.map((lesson) => (
+                  <div key={lesson.lesson_id} className="mastery-lesson-card" data-testid={`mastery-lesson-${lesson.lesson_id}`}>
+                    <div className="mastery-lesson-head">
+                      <h3 className="mastery-lesson-title">{lesson.lesson_title}</h3>
+                      {lesson.completed && <span className="mastery-completed-badge">Completed</span>}
+                    </div>
 
-                  <div className="mastery-lesson-row">
-                    <span className="mastery-lesson-row-label">Vocabulary mastery</span>
-                    <MasteryBar percent={lesson.vocabulary.mastery_percent} testId={`mastery-vocab-bar-${lesson.lesson_id}`} />
-                  </div>
-                  <p className="mastery-lesson-sub">
-                    Learning: {lesson.vocabulary.box_distribution['1']} ·
-                    Developing: {lesson.vocabulary.box_distribution['2']} ·
-                    Mastered: {lesson.vocabulary.box_distribution['3']}
-                    {lesson.vocabulary.cards_due > 0 && ` · ${lesson.vocabulary.cards_due} due`}
-                  </p>
+                    <div className="mastery-lesson-row">
+                      <span className="mastery-lesson-row-label">Vocabulary mastery</span>
+                      <MasteryBar percent={lesson.vocabulary.mastery_percent} testId={`mastery-vocab-bar-${lesson.lesson_id}`} />
+                    </div>
+                    <p className="mastery-lesson-sub">
+                      Learning: {lesson.vocabulary.box_distribution['1']} ·
+                      Developing: {lesson.vocabulary.box_distribution['2']} ·
+                      Mastered: {lesson.vocabulary.box_distribution['3']}
+                      {lesson.vocabulary.cards_due > 0 && ` · ${lesson.vocabulary.cards_due} due`}
+                    </p>
 
-                  {lesson.has_quiz && (
-                    <p className="mastery-lesson-sub">
-                      Quiz: {lesson.quiz_attempts === 0
-                        ? 'not attempted yet'
-                        : `latest ${lesson.latest_quiz_score}% (best ${lesson.best_quiz_score}%)`}
-                    </p>
-                  )}
-                  {lesson.has_open_response && (
-                    <p className="mastery-lesson-sub">
-                      Open response: {lesson.open_response_attempts === 0
-                        ? 'not attempted yet'
-                        : `latest score ${lesson.latest_open_response_score} / 3`}
-                    </p>
-                  )}
-                </div>
-              ))}
+                    {lesson.has_quiz && (
+                      <p className="mastery-lesson-sub">
+                        Quiz: {lesson.quiz_attempts === 0
+                          ? 'not attempted yet'
+                          : `latest ${lesson.latest_quiz_score}% (best ${lesson.best_quiz_score}%)`}
+                      </p>
+                    )}
+                    {lesson.has_open_response && (
+                      <p className="mastery-lesson-sub">
+                        Open response: {lesson.open_response_attempts === 0
+                          ? 'not attempted yet'
+                          : `latest score ${lesson.latest_open_response_score} / 3`}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
 

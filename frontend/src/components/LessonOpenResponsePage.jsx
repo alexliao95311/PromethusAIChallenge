@@ -12,13 +12,15 @@ function LessonOpenResponsePage() {
   const { lessonId } = useParams();
 
   return (
-    <div className="lesson-subpage">
+    <div className="lesson-subpage lesson-scope">
       <Link to={`/lesson/${lessonId}`} className="lesson-subpage-back-link">
         <ArrowLeft size={18} />
         <span>Back to Lesson</span>
       </Link>
-      <LessonFlowProgress lessonId={lessonId} currentStepKey="open-response" />
-      <LessonModeNav lessonId={lessonId} />
+      <div className="lm-sticky-header">
+        <LessonFlowProgress lessonId={lessonId} currentStepKey="open-response" />
+        <LessonModeNav lessonId={lessonId} />
+      </div>
       <LessonOpenResponse lessonId={lessonId} />
       <LessonFlowNextButton lessonId={lessonId} currentStepKey="open-response" />
     </div>
