@@ -20,3 +20,36 @@
 .lesson-persona-back-link:hover {
   text-decoration: underline;
 }
+
+.lesson-persona-context {
+  max-width: 640px;
+  margin: 0 auto 1.25rem;
+  padding: 0 1.5rem;
+  color: #cbd5e1;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.lesson-persona-context strong {
+  color: #f1f5f9;
+}
+
+.lesson-persona-error {
+  max-width: 640px;
+  margin: 0 auto 1.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  color: #fca5a5;
+  font-size: 0.9rem;
+}
+
+.lesson-persona-generating {
+  max-width: 640px;
+  margin: 3rem auto;
+  padding: 0 1.5rem;
+  color: #cbd5e1;
+  font-size: 1.05rem;
+  text-align: center;
+}

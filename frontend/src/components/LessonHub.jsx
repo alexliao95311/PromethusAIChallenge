@@ -2,18 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft, BookOpen } from 'lucide-react';
 import { generateLesson } from '../api';
-import { saveLessonBillText } from '../utils/lessonSession';
+import { saveLessonBillText, slugifyBillTitle } from '../utils/lessonSession';
 import { trackEvent, FLOW_EVENTS } from '../utils/analytics';
 import { staggerFadeUp } from '../utils/animations';
 import './LessonHub.css';
-
-function slugify(text) {
-  return (text || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/(^-|-$)/g, '')
-    .slice(0, 60);
-}
 
 // Lesson Mode entry point -- maps to the core lesson-generation service
 // (POST /lesson/generate). A student arrives here either directly (paste a
@@ -39,7 +31,7 @@ function LessonHub() {
     setLoading(true);
     setError('');
     try {
-      const billId = incoming.billId || slugify(billTitle) || `bill-${Date.now()}`;
+      const billId = incoming.billId || slugifyBillTitle(billTitle) || `bill-${Date.now()}`;
       trackEvent(FLOW_EVENTS.BILL_SELECTED, { lessonId: billId });
       const lesson = await generateLesson(billId, billText, {
         includeVocabulary: true,

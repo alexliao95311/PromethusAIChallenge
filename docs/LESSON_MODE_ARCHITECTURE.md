@@ -963,16 +963,26 @@ Every Lesson Mode backend service now has a dedicated, style-matched
 frontend page instead of one monolithic page, entered from `Legislation.jsx`
 via a third "Lesson" action-card (alongside Analyze/Debate) that extracts
 bill text the same way the existing Debate flow does and navigates to
-`/lesson` with `{billTitle, billText}` in router state.
+`/lesson/persona` with `{billTitle, billText}` in router state -- matching
+the flow order documented in `utils/lessonFlow.js`: bill -> persona
+(optional) -> personalized impact (optional) -> lesson -> ...
 
-- `GET /lesson` -> `LessonHub.jsx` -- generation entry point. Prefills from
-  `location.state` when arriving from `Legislation.jsx`, otherwise accepts a
-  pasted bill title/text. Calls `generateLesson(...)` with vocabulary/quiz/
-  open-response all requested up front, caches the bill text via
-  `utils/lessonSession.js` (`sessionStorage`, keyed by `lesson_id`, used
-  because sub-pages are independently routed and need the bill text to
-  survive navigation and refresh without re-fetching it), then navigates to
-  `/lesson/:lessonId`.
+- `GET /lesson/persona` -> `LessonPersona.jsx` -- the flow's actual entry
+  page once a bill is in progress. Hosts `PersonaBuilder` with its
+  `onSaved`/`onSkip` callbacks wired to the same "advance" action: whether
+  the student saves a persona or clicks "Skip for now", both call
+  `generateLesson(...)` (vocabulary/quiz/open-response all requested up
+  front), cache the bill text via `utils/lessonSession.js`, and navigate to
+  `/lesson/:lessonId/personal-impact`. When this page is reached standalone
+  (no bill in router state -- e.g. via `LessonHub`'s "Build a persona"
+  link), saving/skipping has no next step to advance to, so the persona
+  form just saves in place. Back link goes to `/lesson` (the hub), not
+  Home.
+- `GET /lesson` -> `LessonHub.jsx` -- a secondary, standalone entry point
+  for pasting bill text directly (bypassing Legislation.jsx and the persona
+  step). Calls `generateLesson(...)` the same way and navigates straight to
+  `/lesson/:lessonId`. Still used by the mastery dashboard's
+  "explore new bill" / "generate lesson" recommended-activity links.
 - `GET /lesson/:lessonId` -> `LessonOverview.jsx` -- fetches the lesson via
   the new `GET /lesson/{lesson_id}` backend endpoint (added specifically to
   support re-visiting/refreshing this page) and renders summary/objectives/
