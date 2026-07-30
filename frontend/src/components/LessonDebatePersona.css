@@ -1,13 +1,16 @@
 .debate-persona-container {
-  max-width: var(--lm-content-max);
+  width: 100%;
+  max-width: 760px;
   margin: 0 auto;
   padding: 1.5rem;
   color: #f8fafc;
   font-family: inherit;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 .debate-persona-container > * {
-  max-width: 760px;
+  width: 100%;
   margin-left: auto;
   margin-right: auto;
 }
@@ -43,7 +46,7 @@
   padding: 0.5rem 1rem;
   font-size: 0.85rem;
   cursor: pointer;
-  margin-bottom: 1rem;
+  margin: 0 auto 1rem;
 }
 
 .debate-persona-context-form {
@@ -83,6 +86,8 @@
   font-size: 0.95rem;
   font-weight: 700;
   cursor: pointer;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .debate-persona-generate-btn:hover:not(:disabled) {
@@ -139,10 +144,12 @@
 }
 
 .debate-persona-list-group ul {
-  margin: 0;
+  display: inline-block;
+  margin: 0 auto;
   padding-left: 1.25rem;
   color: #cbd5e1;
   font-size: 0.9rem;
+  text-align: left;
 }
 
 .debate-persona-sources {
@@ -153,7 +160,8 @@
 
 .debate-persona-why {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   background: rgba(251, 191, 36, 0.1);
   border: 1px solid rgba(251, 191, 36, 0.3);
@@ -174,8 +182,9 @@
 
 .debate-persona-prompt-head {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  gap: 1rem;
   font-size: 0.8rem;
   color: #94a3b8;
   margin-bottom: 0.5rem;
@@ -217,6 +226,7 @@
 .debate-persona-hint-heading {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   font-size: 1rem;
   margin: 0 0 0.5rem 0;
@@ -277,4 +287,7 @@
   padding: 0.6rem 1.2rem;
   font-size: 0.9rem;
   cursor: pointer;
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
 }
