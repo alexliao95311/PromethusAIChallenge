@@ -1,5 +1,6 @@
 .lesson-flow-next-btn {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
   align-items: center;
   gap: 0.5rem;
   background: #4a90e2;
@@ -9,7 +10,7 @@
   font-weight: 700;
   font-size: 0.9rem;
   text-decoration: none;
-  margin-top: 1.5rem;
+  margin: 1.5rem 0 0 auto;
 }
 
 .lesson-flow-next-btn:hover {

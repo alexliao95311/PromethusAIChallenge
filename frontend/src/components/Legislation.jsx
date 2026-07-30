@@ -2192,8 +2192,9 @@ const Legislation = ({ user }) => {
 
   // Extracts the selected bill's text (reusing the same per-source
   // extraction endpoints as handleDebateExecution above, but never modifying
-  // that function) and hands off to Lesson Mode's own entry page instead of
-  // Debate Mode. Does not require a debate mode/format selection.
+  // that function) and hands off to Lesson Mode's persona step (the flow's
+  // entry page) instead of Debate Mode. Does not require a debate mode/format
+  // selection.
   const handleLessonExecution = async () => {
     if (!debateTopic.trim()) {
       setError('Please enter a bill title.');
@@ -2217,7 +2218,7 @@ const Legislation = ({ user }) => {
           throw new Error('Failed to extract text');
         }
         const data = await response.json();
-        navigate('/lesson', {
+        navigate('/lesson/persona', {
           state: { billTitle: selectedBill.name || debateTopic, billText: data.text },
         });
       } catch (err) {
@@ -2263,7 +2264,7 @@ const Legislation = ({ user }) => {
           throw new Error('Failed to extract bill text');
         }
         const data = await response.json();
-        navigate('/lesson', { state: { billTitle: data.title, billText: data.text } });
+        navigate('/lesson/persona', { state: { billTitle: data.title, billText: data.text } });
         setLoadingState(false);
       } catch (err) {
         handleError(err);
@@ -2271,7 +2272,7 @@ const Legislation = ({ user }) => {
         return;
       }
     } else {
-      navigate('/lesson', { state: { billTitle: debateTopic, billText: '' } });
+      navigate('/lesson/persona', { state: { billTitle: debateTopic, billText: '' } });
     }
   };
 
