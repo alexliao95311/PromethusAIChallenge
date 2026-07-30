@@ -1,6 +1,10 @@
 .lesson-flow-next-btn {
   display: flex;
   width: fit-content;
+  position: fixed;
+  right: 2rem;
+  bottom: 2rem;
+  z-index: 20;
   align-items: center;
   gap: 0.5rem;
   background: #4a90e2;
@@ -10,9 +14,16 @@
   font-weight: 700;
   font-size: 0.9rem;
   text-decoration: none;
-  margin: 1.5rem 0 0 auto;
+  margin: 0;
 }
 
 .lesson-flow-next-btn:hover {
   background: #3a7bc8;
+}
+
+@media (max-width: 640px) {
+  .lesson-flow-next-btn {
+    right: 1rem;
+    bottom: 1rem;
+  }
 }
